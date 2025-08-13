@@ -1,4 +1,5 @@
 {
+  "$schema": "../../schemas/config.json",
   "agent": "claude",
   "rules": ["adonisjs/controllers", "adonisjs/naming-convention"]
 }
