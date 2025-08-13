@@ -3,6 +3,7 @@
   "description": "Test",
   "rules": [
     {
+      "parent": "adonisjs",
       "id": "controllers",
       "name": "Controllers",
       "description": "Guidelines for writing controllers",
@@ -10,6 +11,7 @@
       "content": "## Controllers\n\n### Rules\n\n- Controllers MUST be placed inside the `app/controllers` folder\n- Controllers MUST be named using `<name>_controller.ts` (eg. `auth_controller.ts`)\n- Controllers MUST ONLY export a default class (eg. `AuthController`)\n\n### Example\n\n#### Dependency injection\n\nDependencies (services) must be injected inside the constructor. When doing so `@inject` decorator MUST be added to the class.\n\n```ts\n@inject()\nexport default class PostsController {\n  constructor(private postsService: PostsService) {}\n\n  store() {}\n  view() {}\n}\n```\n\n### Sources\n\n- More information are available here <https://docs.adonisjs.com/guides/basics/controllers>\n"
     },
     {
+      "parent": "adonisjs",
       "id": "structure",
       "name": "Structure",
       "description": "Guidelines for the Adonis structure",
