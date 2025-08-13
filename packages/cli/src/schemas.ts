@@ -9,7 +9,7 @@ export const schemas = {
   ruleMetadata: z.object({
     name: z.string(),
     description: z.string(),
-    type: z.enum(["rule"]),
+    type: z.enum(["rule", "global"]),
   }),
   config: z.object({
     rules: z.map(z.string(), z.array(z.string())),

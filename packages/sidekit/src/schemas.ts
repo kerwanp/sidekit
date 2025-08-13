@@ -4,7 +4,7 @@ const rule = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  type: z.enum(["global"]),
+  type: z.enum(["global", "rule"]),
   content: z.string(),
 });
 

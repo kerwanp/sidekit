@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { readConfig } from "../../config.js";
+import { readConfig, readHeader } from "../../config.js";
 import { generate } from "../../sidekit.js";
 
 export default defineCommand({
@@ -11,6 +11,8 @@ export default defineCommand({
     const cwd = process.cwd();
 
     const config = await readConfig({ cwd });
-    const kits = await generate({ cwd, config });
+    const header = await readHeader({ cwd });
+
+    await generate({ cwd, config, header });
   },
 });

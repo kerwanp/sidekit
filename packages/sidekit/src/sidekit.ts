@@ -1,21 +1,22 @@
+import { claudeGenerator } from "./generators/claude.js";
 import { fetchKit } from "./registry.js";
-import { SidekitConfig, SidekitRule } from "./types.js";
+import {
+  SidekitConfig,
+  SidekitGeneratorOptions,
+  SidekitRule,
+} from "./types.js";
 
-export type GenerateOptions = {
-  cwd: string;
-  config: SidekitConfig;
-};
-
-export async function generate({ cwd, config }: GenerateOptions) {
+export async function generate({
+  cwd,
+  config,
+  header,
+}: Omit<SidekitGeneratorOptions, "rules">) {
   const rules = await fetchKitRules(config);
 
-  console.log(rules);
+  if (config.agent === "claude") {
+    await claudeGenerator({ cwd, config, rules, header });
+  }
 }
-
-// export async function fetchKits(config: SidekitConfig) {
-//   const ids = [...new Set(config.rules.map((rule) => rule.split(":")[0]))];
-//   return Promise.all(ids.map((id) => fetchKit({ input: id })));
-// }
 
 export async function fetchKitRules(config: SidekitConfig) {
   const output: SidekitRule[] = [];

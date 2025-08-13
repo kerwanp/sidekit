@@ -1,7 +1,9 @@
 ---
 name: Controllers
 description: Guidelines for writing controllers
-type: rule
+type: global
 ---
 
-Heeey
+## Controllers
+
+Hello world

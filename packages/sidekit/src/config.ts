@@ -12,3 +12,8 @@ export async function readConfig({ cwd }: ReadConfigOptions) {
   const parsed = schemas.config.parse(content);
   return parsed;
 }
+
+export async function readHeader({ cwd }: ReadConfigOptions) {
+  const path = join(cwd, ".sidekit", "header.md");
+  return readFile(path, "utf8");
+}

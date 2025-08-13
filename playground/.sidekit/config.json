@@ -1,5 +1,5 @@
 {
   "$schema": "../../schemas/config.json",
   "agent": "claude",
-  "rules": ["adonisjs:example"]
+  "rules": ["adonisjs:example", "adonisjs:naming-convention"]
 }

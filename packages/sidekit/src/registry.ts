@@ -17,7 +17,7 @@ export type ReadFromGlobalRegistryKitOptions = {
 export async function fetchKitFromGlobalRegistry({
   id,
 }: ReadFromGlobalRegistryKitOptions) {
-  const url = `https://raw.githubusercontent.com/kerwanp/sidekick/refs/heads/main/registry/${id}/sidekit.json?token=GHSAT0AAAAAADGNNGJJXAFFFBVAQUJNPCDY2E43LOQ`;
+  const url = `https://raw.githubusercontent.com/kerwanp/sidekick/refs/heads/main/registry/${id}/sidekit.json?token=GHSAT0AAAAAADGNNGJJFOMLHYNJCM6LXW3G2E44FBA`;
   const response = await fetch(url);
 
   const content = await response.text();

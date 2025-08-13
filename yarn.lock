@@ -1935,6 +1935,7 @@ __metadata:
   resolution: "sidekick@workspace:."
   dependencies:
     prettier: "npm:^3.6.2"
+    sidekit: "workspace:*"
     turbo: "npm:^2.5.5"
     typescript: "npm:5.8.3"
   languageName: unknown
