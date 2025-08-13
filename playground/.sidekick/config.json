@@ -1,0 +1,4 @@
+{
+  "agent": "claude",
+  "rules": ["adonisjs/controllers", "adonisjs/naming-convention"]
+}

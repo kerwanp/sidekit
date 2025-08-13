@@ -1,0 +1,7 @@
+{
+  "name": "playground",
+  "dependencies": {
+    "@sidekick/cli": "workspace:*"
+  },
+  "packageManager": "yarn@4.9.2"
+}
