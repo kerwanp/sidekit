@@ -1,0 +1,12 @@
+{
+  "name": "Test",
+  "description": "Test",
+  "rules": [
+    {
+      "name": "example",
+      "description": "Example rule",
+      "type": "global",
+      "content": "## Example rule\n\nThis rule is an example"
+    }
+  ]
+}

@@ -287,13 +287,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sidekick/cli@workspace:*, @sidekick/cli@workspace:packages/cli":
+"@sidekick/cli@workspace:packages/cli":
   version: 0.0.0-use.local
   resolution: "@sidekick/cli@workspace:packages/cli"
   dependencies:
     "@adonisjs/eslint-config": "npm:^2.1.2"
     "@adonisjs/tsconfig": "npm:^1.4.1"
     "@clack/prompts": "npm:^0.11.0"
+    "@sidekit/core": "workspace:*"
     "@types/node": "npm:^24.2.1"
     c12: "npm:^3.2.0"
     citty: "npm:^0.1.6"
@@ -309,18 +310,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@sidekick/core@workspace:packages/core":
-  version: 0.0.0-use.local
-  resolution: "@sidekick/core@workspace:packages/core"
-  dependencies:
-    "@adonisjs/eslint-config": "npm:^2.1.2"
-    "@adonisjs/tsconfig": "npm:^1.4.1"
-    "@types/node": "npm:^24.2.1"
-    eslint: "npm:^9.33.0"
-    typescript: "npm:^5.9.2"
-  languageName: unknown
-  linkType: soft
-
 "@sidekick/schemas@workspace:packages/schemas":
   version: 0.0.0-use.local
   resolution: "@sidekick/schemas@workspace:packages/schemas"
@@ -331,6 +320,20 @@ __metadata:
     "@types/node": "npm:^24.2.1"
     eslint: "npm:^9.33.0"
     ts-node: "npm:^10.9.2"
+    typescript: "npm:^5.9.2"
+    zod: "npm:^4.0.17"
+  languageName: unknown
+  linkType: soft
+
+"@sidekit/core@workspace:*, @sidekit/core@workspace:packages/core":
+  version: 0.0.0-use.local
+  resolution: "@sidekit/core@workspace:packages/core"
+  dependencies:
+    "@adonisjs/eslint-config": "npm:^2.1.2"
+    "@adonisjs/tsconfig": "npm:^1.4.1"
+    "@types/node": "npm:^24.2.1"
+    eslint: "npm:^9.33.0"
+    front-matter: "npm:^4.0.2"
     typescript: "npm:^5.9.2"
     zod: "npm:^4.0.17"
   languageName: unknown
@@ -1792,7 +1795,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "playground@workspace:playground"
   dependencies:
-    "@sidekick/cli": "workspace:*"
+    sidekit: "workspace:*"
   languageName: unknown
   linkType: soft
 
@@ -1934,6 +1937,26 @@ __metadata:
     prettier: "npm:^3.6.2"
     turbo: "npm:^2.5.5"
     typescript: "npm:5.8.3"
+  languageName: unknown
+  linkType: soft
+
+"sidekit@workspace:*, sidekit@workspace:packages/sidekit":
+  version: 0.0.0-use.local
+  resolution: "sidekit@workspace:packages/sidekit"
+  dependencies:
+    "@adonisjs/eslint-config": "npm:^2.1.2"
+    "@adonisjs/tsconfig": "npm:^1.4.1"
+    "@clack/prompts": "npm:^0.11.0"
+    "@types/node": "npm:^24.2.1"
+    citty: "npm:^0.1.6"
+    eslint: "npm:^9.33.0"
+    front-matter: "npm:^4.0.2"
+    picocolors: "npm:^1.1.1"
+    prettier: "npm:^3.6.2"
+    typescript: "npm:^5.9.2"
+    zod: "npm:^4.0.17"
+  bin:
+    sidekit: ./build/bin/sidekit.js
   languageName: unknown
   linkType: soft
 
