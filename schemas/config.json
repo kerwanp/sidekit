@@ -1,1 +1,14 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"agent":{"type":"string","enum":["opencode","claude","crush","cursor"]},"rules":{"type":"array","items":{"type":"string"}}},"required":["agent","rules"],"additionalProperties":false}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "agent": {
+      "type": "string",
+      "enum": ["opencode", "claude", "crush", "cursor"]
+    },
+    "rules": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["agent", "rules"],
+  "additionalProperties": false
+}
+

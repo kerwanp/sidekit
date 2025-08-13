@@ -1951,6 +1951,7 @@ __metadata:
     citty: "npm:^0.1.6"
     eslint: "npm:^9.33.0"
     front-matter: "npm:^4.0.2"
+    pathe: "npm:^2.0.3"
     picocolors: "npm:^1.1.1"
     prettier: "npm:^3.6.2"
     typescript: "npm:^5.9.2"

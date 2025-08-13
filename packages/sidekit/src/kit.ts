@@ -79,7 +79,7 @@ export async function indexKit({ cwd }: IndexKitOptions) {
   for (const file of files) {
     const rulePath = join(path, file);
     const content = await readFile(rulePath, "utf8");
-    const rule = parseRule(content);
+    const rule = parseRule(file.replace(".md", ""), content);
     rules.push(rule);
   }
 

@@ -3,6 +3,7 @@
   "description": "Test",
   "rules": [
     {
+      "id": "example",
       "name": "example",
       "description": "Example rule",
       "type": "global",

@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import kit from "./kit/main.js";
+import generate from "./generate.js";
 
 export default defineCommand({
   meta: {
@@ -8,5 +9,6 @@ export default defineCommand({
   },
   subCommands: {
     kit,
+    generate,
   },
 });
