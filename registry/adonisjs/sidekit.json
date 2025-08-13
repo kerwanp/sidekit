@@ -6,15 +6,15 @@
       "id": "controllers",
       "name": "Controllers",
       "description": "Guidelines for writing controllers",
-      "type": "global",
-      "content": "## Controllers\n\nHello world\n"
+      "type": "rule",
+      "content": "## Controllers\n\n### Rules\n\n- Controllers MUST be placed inside the `app/controllers` folder\n- Controllers MUST be named using `<name>_controller.ts` (eg. `auth_controller.ts`)\n- Controllers MUST ONLY export a default class (eg. `AuthController`)\n\n### Example\n\n#### Dependency injection\n\nDependencies (services) must be injected inside the constructor. When doing so `@inject` decorator MUST be added to the class.\n\n```ts\n@inject()\nexport default class PostsController {\n  constructor(private postsService: PostsService) {}\n\n  store() {}\n  view() {}\n}\n```\n\n### Sources\n\n- More information are available here <https://docs.adonisjs.com/guides/basics/controllers>\n"
     },
     {
-      "id": "naming-convention",
-      "name": "Naming convention",
-      "description": "AdonisJS Naming convention",
+      "id": "structure",
+      "name": "Structure",
+      "description": "Guidelines for the Adonis structure",
       "type": "rule",
-      "content": "- Typescript files **MUST BE** named using snake_case (eg. `auth_controller.ts`)\n"
+      "content": "## Structure\n\n```\nroot/\n├── app/                  # Core application logic (MVC pattern)\n│   ├── controllers/      # HTTP request handlers\n│   ├── exceptions/       # Custom error handling and exception classes\n│   ├── middleware/       # Request/response interceptors\n│   └── models/           # Lucid ORM models (Active Record pattern)\n├── bin/                  # Executable scripts\n├── config/               # Application configuration files\n├── database/             # Database-related files\n│   ├── factories/        # Model factories\n│   └── migrations/       # Database migration files\n├── start/                # Application bootstrapping\n│   ├── env.ts            # Environment variable validation\n│   ├── kernel.ts         # Middleware registration\n│   └── routes.ts         # Route definitions\n├── tests/                # Test suites\n│   ├── bootstrap.ts      # Test framework setup (japa)\n│   ├── unit/             # Unit tests\n│   ├── e2e/              # E2E tests\n│   └── functional/       # Integration tests\n├── ace.js                # AdonisJS CLI configuration\n├── adonisrc.ts           # AdonisJS runtime configuration\n├── eslint.config.js      # Code linting rules\n├── package.json          # Dependencies and scripts\n└── tsconfig.json         # TypeScript configuration\n```\n\n### Rules\n\n- You MUST NOT modify `ace.js` file\n"
     }
   ]
 }

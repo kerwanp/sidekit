@@ -5,6 +5,7 @@
     "build": "tsc",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "schemas": "node --import=./tsnode.esm.js --enable-source-maps bin/schemas.ts",
     "dev": "tsc --watch"
   },
   "bin": "./build/bin/sidekit.js",
@@ -14,8 +15,10 @@
   "devDependencies": {
     "@adonisjs/eslint-config": "^2.1.2",
     "@adonisjs/tsconfig": "^1.4.1",
+    "@swc/core": "^1.13.3",
     "@types/node": "^24.2.1",
     "eslint": "^9.33.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   },
   "packageManager": "yarn@4.9.2",

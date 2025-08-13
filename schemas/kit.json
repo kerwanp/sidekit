@@ -3,9 +3,24 @@
   "type": "object",
   "properties": {
     "name": { "type": "string" },
-    "description": { "type": "string" }
+    "description": { "type": "string" },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "parent": { "type": "string" },
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "type": { "type": "string", "enum": ["global", "rule"] },
+          "content": { "type": "string" }
+        },
+        "required": ["parent", "id", "name", "description", "type", "content"],
+        "additionalProperties": false
+      }
+    }
   },
-  "required": ["name", "description"],
+  "required": ["name", "description", "rules"],
   "additionalProperties": false
 }
-

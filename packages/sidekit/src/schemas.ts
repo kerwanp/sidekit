@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const rule = z.object({
+  parent: z.string(),
   id: z.string(),
   name: z.string(),
   description: z.string(),

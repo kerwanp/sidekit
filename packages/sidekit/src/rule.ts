@@ -4,6 +4,7 @@ import fm from "front-matter";
 
 export function parseRule(id: string, content: string): SidekitRule {
   const data = (fm as any)(content);
+
   const rule = {
     ...data.attributes,
     id,

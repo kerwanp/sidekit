@@ -2,6 +2,4 @@
 
 This file provides guidance for coding agents when working with code in this repository.
 
-## Example rule
-
-This rule is an example
+- Typescript files **MUST BE** named using snake_case (eg. `auth_controller.ts`)
