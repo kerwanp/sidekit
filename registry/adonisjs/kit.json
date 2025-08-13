@@ -1,4 +1,5 @@
 {
   "name": "AdonisJS",
-  "description": "Guidelines for the AdonisJS framework"
+  "description": "Guidelines for the AdonisJS framework",
+  "rules": ["./rules/controllers.md", "./rules/naming-convention.md"]
 }
