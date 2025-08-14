@@ -9,7 +9,6 @@ export type SidekitGeneratorOptions = {
   cwd: string;
   config: SidekitConfig;
   rules: SidekitRule[];
-  header: string;
 };
 
 export type SidekitGenerator = (

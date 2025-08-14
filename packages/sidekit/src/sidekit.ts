@@ -1,11 +1,15 @@
+import { join } from "pathe";
 import { claudeGenerator } from "./generators/claude.js";
 import { opencodeGenerator } from "./generators/opencode.js";
 import { fetchKit } from "./registry.js";
 import {
   SidekitConfig,
   SidekitGeneratorOptions,
+  SidekitKit,
   SidekitRule,
 } from "./types.js";
+import { readFile } from "node:fs/promises";
+import { parseRule } from "./rule.js";
 
 export async function generate(options: SidekitGeneratorOptions) {
   if (options.config.agent === "claude") {
@@ -17,21 +21,35 @@ export async function generate(options: SidekitGeneratorOptions) {
   }
 }
 
-export async function fetchRules(config: SidekitConfig) {
-  const output: SidekitRule[] = [];
-  const data = config.rules.reduce(
-    (acc, b) => {
-      const [kit, rule] = b.split(":");
-      acc[kit] = [...(acc[kit] ?? []), rule];
-      return acc;
-    },
-    {} as Record<string, string[]>,
-  );
+export type FetchRulesOptions = {
+  cwd: string;
+  config: SidekitConfig;
+};
 
-  for (const [kitId, ruleIds] of Object.entries(data)) {
-    const kit = await fetchKit({ input: kitId });
-    const rules = kit.rules.filter((rule) => ruleIds.includes(rule.id));
-    output.push(...rules);
+export async function fetchRules({ cwd, config }: FetchRulesOptions) {
+  const output: SidekitRule[] = [];
+  const data = normalizeRules(config);
+
+  const kits = new Map<string, SidekitKit>();
+
+  for (const rule of data) {
+    if (rule.source === "registry") {
+      let kit = kits.get(rule.kit);
+      if (!kit) {
+        kit = await fetchKit({ input: rule.kit });
+        kits.set(rule.kit, kit);
+      }
+
+      output.push(kit.rules.find((r) => r.id === rule.name)!); // TODO: Maybe handle this
+    }
+
+    if (rule.source === "local") {
+      const path = join(cwd, ".sidekit", rule.path);
+      const content = await readFile(path, "utf8");
+      const r = parseRule(rule.path, content);
+
+      output.push(r);
+    }
   }
 
   return output;
@@ -43,9 +61,9 @@ type NormalizedRule =
       kit: string;
       name: string;
     }
-  | { source: "local"; name: string };
+  | { source: "local"; path: string };
 
-export async function normalizeRules(config: SidekitConfig) {
+export function normalizeRules(config: SidekitConfig) {
   const output: NormalizedRule[] = [];
 
   for (const rule of config.rules) {
@@ -56,11 +74,14 @@ export async function normalizeRules(config: SidekitConfig) {
         kit,
         name,
       });
+      continue;
     }
 
     output.push({
       source: "local",
-      name: rule,
+      path: rule,
     });
   }
+
+  return output;
 }

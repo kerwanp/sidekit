@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 const rule = z.object({
-  parent: z.string(),
+  parent: z.string().optional(),
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  type: z.enum(["global", "rule"]),
+  type: z.enum(["rule"]),
   content: z.string(),
 });
 

@@ -1,7 +1,8 @@
 {
+  "$schema": "https://raw.githubusercontent.com/kerwanp/sidekit/refs/heads/main/schemas/kit.json",
   "name": "Workflow",
   "description": "Set of rules for improved workflow",
-  "presets": [],
+  "presets": {},
   "rules": [
     {
       "parent": "workflow",

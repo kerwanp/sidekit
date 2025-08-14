@@ -21,6 +21,7 @@ export async function initSidekit({ cwd, name, description }: InitKitOptions) {
     config: {
       name,
       description,
+      presets: {},
       rules: [],
     },
   });
@@ -58,9 +59,16 @@ export type UpdateSidekitOptions = {
 export async function updateKitConfig({ cwd, config }: UpdateSidekitOptions) {
   const path = join(cwd, "sidekit.json");
   const parsed = schemas.kit.parse(config);
-  const content = await format(JSON.stringify(parsed), {
-    filepath: path,
-  });
+  const content = await format(
+    JSON.stringify({
+      $schema:
+        "https://raw.githubusercontent.com/kerwanp/sidekit/refs/heads/main/schemas/kit.json",
+      ...parsed,
+    }),
+    {
+      filepath: path,
+    },
+  );
 
   await writeFile(path, content);
 }

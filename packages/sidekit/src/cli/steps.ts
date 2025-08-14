@@ -2,7 +2,7 @@ import { multiselect, spinner } from "@clack/prompts";
 import { SidekitRule } from "../types.js";
 import { fetchKit } from "../registry.js";
 import { fetchRules, generate } from "../sidekit.js";
-import { readConfig, readHeader } from "../config.js";
+import { readConfig } from "../config.js";
 
 export const steps = {
   async fetchKit(name: string) {
@@ -33,11 +33,10 @@ export const steps = {
   async generate(cwd: string) {
     const s = spinner();
     const config = await readConfig({ cwd });
-    const header = await readHeader({ cwd });
-    const rules = await fetchRules(config);
+    const rules = await fetchRules({ cwd, config });
 
     s.start(`Generating files for ${config.agent}`);
-    await generate({ config, cwd, header, rules });
+    await generate({ config, cwd, rules });
     s.stop(`Generated files for ${config.agent} ✔`);
   },
 };

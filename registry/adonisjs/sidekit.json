@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/kerwanp/sidekit/refs/heads/main/schemas/kit.json",
   "name": "Test",
   "description": "Test",
   "presets": {

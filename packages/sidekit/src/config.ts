@@ -15,11 +15,6 @@ export async function readConfig({ cwd }: ReadConfigOptions) {
   return parsed;
 }
 
-export async function readHeader({ cwd }: ReadConfigOptions) {
-  const path = join(cwd, ".sidekit", "header.md");
-  return readFile(path, "utf8");
-}
-
 export type UpdateConfigOptions = {
   cwd: string;
   config: SidekitConfig;
@@ -30,9 +25,16 @@ export async function updateConfig({ cwd, config }: UpdateConfigOptions) {
 
   await writeFile(
     path,
-    await format(JSON.stringify(config), {
-      filepath: path,
-    }),
+    await format(
+      JSON.stringify({
+        $schema:
+          "https://github.com/kerwanp/sidekit/blob/main/schemas/config.json",
+        ...config,
+      }),
+      {
+        filepath: path,
+      },
+    ),
   );
 }
 
