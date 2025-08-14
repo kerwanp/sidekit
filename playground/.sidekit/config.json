@@ -2,5 +2,5 @@
   "$schema": "https://github.com/kerwanp/sidekit/blob/main/schemas/config.json",
   "agents": ["claude"],
   "rules": ["rules/introduction.md"],
-  "presets": ["adonisjs:recommended"]
+  "presets": ["adonisjs:recommended", "sidekit:recommended"]
 }

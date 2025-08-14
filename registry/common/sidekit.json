@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/kit.json",
+  "$schema": "https://raw.githubusercontent.com/kerwanp/sidekit/refs/heads/main/schemas/kit.json",
   "name": "Common",
   "description": "Common set of rules",
   "rules": [

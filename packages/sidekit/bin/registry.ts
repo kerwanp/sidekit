@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { fileURLToPath } from "mlly";
 import { indexKit } from "../src/kit/index_kit.js";
 import { log } from "@clack/prompts";
@@ -11,9 +11,14 @@ const path = new URL("../../../registry/", import.meta.url);
 const kits = new Map<string, SidekitKit>();
 
 for (const folder of await readdir(path)) {
+  const kitPath = new URL(folder, path);
+
+  const stats = await stat(kitPath);
+
+  if (!stats.isDirectory()) continue;
+
   log.step(`Index ${folder} registry kit`);
 
-  const kitPath = new URL(folder, path);
   await indexKit({ cwd: fileURLToPath(kitPath) });
 
   const config = await loadKitConfig({ cwd: fileURLToPath(kitPath) });

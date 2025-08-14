@@ -4,17 +4,18 @@
     {
       "id": "adonisjs",
       "name": "AdonisJS",
-      "description": "Rules and guidelines for the AdonisJS framework"
+      "description": "Comprehensive rules for AdonisJS 6 development"
+    },
+    { "id": "common", "name": "Common", "description": "Common set of rules" },
+    {
+      "id": "honojs",
+      "name": "Hono.js",
+      "description": "Rules and guidelines for the Hono.js web framework"
     },
     {
       "id": "sidekit",
       "name": "Sidekit",
       "description": "AI Guidelines for using Sidekit"
-    },
-    {
-      "id": "workflow",
-      "name": "Workflow",
-      "description": "Set of rules for improved workflow"
     }
   ]
 }

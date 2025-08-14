@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/kit.json",
+  "$schema": "https://raw.githubusercontent.com/kerwanp/sidekit/refs/heads/main/schemas/kit.json",
   "name": "Sidekit",
   "description": "AI Guidelines for using Sidekit",
   "rules": [
