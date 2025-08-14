@@ -41,12 +41,18 @@ export async function updateConfig({ cwd, config }: UpdateConfigOptions) {
 export type AddConfigRulesOptions = {
   cwd: string;
   rules: string[];
+  presets: string[];
 };
 
-export async function addConfigRules({ cwd, rules }: AddConfigRulesOptions) {
+export async function addConfigRules({
+  cwd,
+  rules,
+  presets,
+}: AddConfigRulesOptions) {
   const config = await readConfig({ cwd });
 
   config.rules = [...new Set([...config.rules, ...rules])];
+  config.presets = [...new Set([...config.presets, ...presets])];
 
   await updateConfig({ cwd, config });
 }

@@ -28,18 +28,34 @@ export type FetchRulesOptions = {
 
 export async function fetchRules({ cwd, config }: FetchRulesOptions) {
   const output: SidekitRule[] = [];
-  const data = normalizeRules(config);
 
   const kits = new Map<string, SidekitKit>();
 
+  async function getCachedKit(id: string) {
+    let kit = kits.get(id);
+    if (!kit) {
+      kit = await fetchKit({ input: id });
+      kits.set(id, kit);
+    }
+
+    return kit;
+  }
+
+  const rulesStr = config.rules;
+
+  for (const id of config.presets) {
+    const [kitName, presetName] = id.split(":");
+    const kit = await getCachedKit(kitName);
+    const presetRules = kit.presets[presetName];
+
+    rulesStr.push(...presetRules);
+  }
+
+  const data = normalizeRules(rulesStr);
+
   for (const rule of data) {
     if (rule.source === "registry") {
-      let kit = kits.get(rule.kit);
-      if (!kit) {
-        kit = await fetchKit({ input: rule.kit });
-        kits.set(rule.kit, kit);
-      }
-
+      const kit = await getCachedKit(rule.kit);
       output.push(kit.rules.find((r) => r.id === rule.name)!); // TODO: Maybe handle this
     }
 
@@ -63,10 +79,10 @@ type NormalizedRule =
     }
   | { source: "local"; path: string };
 
-export function normalizeRules(config: SidekitConfig) {
+export function normalizeRules(rules: string[]) {
   const output: NormalizedRule[] = [];
 
-  for (const rule of config.rules) {
+  for (const rule of rules) {
     if (rule.includes(":")) {
       const [kit, name] = rule.split(":");
       output.push({

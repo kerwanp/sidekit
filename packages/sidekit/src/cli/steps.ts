@@ -15,15 +15,30 @@ export const steps = {
 
     return kit;
   },
+  async selectPresets(presets: Record<string, string[]>) {
+    const selected = await multiselect({
+      message: "What preset do you want to add?",
+      required: false,
+      options: Object.entries(presets).map(([name, rules]) => ({
+        label: name,
+        hint: rules.join(", "),
+        value: name,
+      })),
+    });
+
+    if (typeof selected === "symbol") process.exit();
+
+    return selected;
+  },
   async selectRules(rules: SidekitRule[]) {
     const selected = await multiselect({
-      message: "What rules do you want to enable?",
+      message: "What rules do you want to add?",
+      required: false,
       options: rules.map((rule) => ({
         label: rule.name,
         hint: rule.description,
         value: rule,
       })),
-      required: true,
     });
 
     if (typeof selected === "symbol") process.exit();

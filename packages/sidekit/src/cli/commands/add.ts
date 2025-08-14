@@ -24,11 +24,13 @@ export default defineCommand({
     intro(color.bgBlackBright(` sidekit add `));
 
     const kit = await steps.fetchKit(args.name);
+    const presets = await steps.selectPresets(kit.presets);
     const rules = await steps.selectRules(kit.rules);
 
     await addConfigRules({
       cwd: args.cwd,
       rules: rules.map((rule) => `${args.name}:${rule.id}`),
+      presets: presets.map((preset) => `${args.name}:${preset}`),
     });
 
     await steps.generate(args.cwd);
