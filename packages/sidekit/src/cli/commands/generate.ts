@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { readConfig, readHeader } from "../../config.js";
-import { generate } from "../../sidekit.js";
+import { fetchKitRules, generate } from "../../sidekit.js";
+import { intro, log, outro } from "@clack/prompts";
 
 export default defineCommand({
   meta: {
@@ -10,9 +11,18 @@ export default defineCommand({
   async run() {
     const cwd = process.cwd();
 
+    intro(`sidekit generate`);
+
+    log.step(`read configuration`);
     const config = await readConfig({ cwd });
     const header = await readHeader({ cwd });
 
-    await generate({ cwd, config, header });
+    log.success(`fetch kits`);
+    const rules = await fetchKitRules(config);
+
+    log.step(`generate guidelines`);
+    await generate({ cwd, config, header, rules });
+
+    outro(`done`);
   },
 });

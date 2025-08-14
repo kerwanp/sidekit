@@ -6,15 +6,9 @@ import {
   SidekitRule,
 } from "./types.js";
 
-export async function generate({
-  cwd,
-  config,
-  header,
-}: Omit<SidekitGeneratorOptions, "rules">) {
-  const rules = await fetchKitRules(config);
-
-  if (config.agent === "claude") {
-    await claudeGenerator({ cwd, config, rules, header });
+export async function generate(options: SidekitGeneratorOptions) {
+  if (options.config.agent === "claude") {
+    await claudeGenerator(options);
   }
 }
 

@@ -13,3 +13,15 @@ export function parseRule(id: string, content: string): SidekitRule {
 
   return schemas.rule.parse(rule);
 }
+
+export function groupRules(rules: SidekitRule[]) {
+  const map = new Map<string, SidekitRule[]>();
+
+  for (const rule of rules) {
+    const o = map.get(rule.parent) ?? [];
+    o.push(rule);
+    map.set(rule.parent, o);
+  }
+
+  return map;
+}
