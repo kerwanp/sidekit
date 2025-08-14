@@ -5,7 +5,7 @@ description: Enforce agent to commit changes using conventional commits
 type: rule
 ---
 
-## Conventional commits
+## Commit worfklow
 
 ### MANDATORY COMMIT BEHAVIOR
 

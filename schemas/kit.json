@@ -19,8 +19,13 @@
         "required": ["parent", "id", "name", "description", "type", "content"],
         "additionalProperties": false
       }
+    },
+    "presets": {
+      "type": "object",
+      "propertyNames": { "type": "string" },
+      "additionalProperties": { "type": "array", "items": { "type": "string" } }
     }
   },
-  "required": ["name", "description", "rules"],
+  "required": ["name", "description", "rules", "presets"],
   "additionalProperties": false
 }

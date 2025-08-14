@@ -1,6 +1,9 @@
 {
   "name": "Test",
   "description": "Test",
+  "presets": {
+    "recommended": ["adonisjs:structure", "adonisjs:controllers"]
+  },
   "rules": [
     {
       "parent": "adonisjs",

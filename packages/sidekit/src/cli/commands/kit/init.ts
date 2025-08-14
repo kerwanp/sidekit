@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { initSidekit } from "../../../kit.js";
 import { intro, log, outro, text } from "@clack/prompts";
+import color from "picocolors";
 
 export default defineCommand({
   meta: {
@@ -23,7 +24,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    intro(`sidekit kit init`);
+    intro(color.bgBlackBright(` sidekit kit index `));
 
     const name =
       args.name ||

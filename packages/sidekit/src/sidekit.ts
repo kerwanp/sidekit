@@ -17,7 +17,7 @@ export async function generate(options: SidekitGeneratorOptions) {
   }
 }
 
-export async function fetchKitRules(config: SidekitConfig) {
+export async function fetchRules(config: SidekitConfig) {
   const output: SidekitRule[] = [];
   const data = config.rules.reduce(
     (acc, b) => {
@@ -35,4 +35,32 @@ export async function fetchKitRules(config: SidekitConfig) {
   }
 
   return output;
+}
+
+type NormalizedRule =
+  | {
+      source: "registry";
+      kit: string;
+      name: string;
+    }
+  | { source: "local"; name: string };
+
+export async function normalizeRules(config: SidekitConfig) {
+  const output: NormalizedRule[] = [];
+
+  for (const rule of config.rules) {
+    if (rule.includes(":")) {
+      const [kit, name] = rule.split(":");
+      output.push({
+        source: "registry",
+        kit,
+        name,
+      });
+    }
+
+    output.push({
+      source: "local",
+      name: rule,
+    });
+  }
 }

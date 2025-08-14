@@ -1,5 +1,8 @@
 {
-  "$schema": "https://raw.githubusercontent.com/kerwanp/sidekit/refs/heads/main/schemas/config.json",
   "agent": "claude",
-  "rules": ["adonisjs:structure", "adonisjs:controllers"]
+  "rules": [
+    "local:rules/demo.md",
+    "registry:adonisjs:structure",
+    "registry:adonisjs:controllers"
+  ]
 }

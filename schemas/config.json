@@ -2,9 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
-    "agent": { "type": "string", "enum": ["claude"] },
-    "rules": { "type": "array", "items": { "type": "string" } }
+    "agent": { "type": "string", "enum": ["claude", "opencode"] },
+    "rules": { "type": "array", "items": { "type": "string" } },
+    "presets": { "type": "array", "items": { "type": "string" } }
   },
-  "required": ["agent", "rules"],
+  "required": ["agent", "rules", "presets"],
   "additionalProperties": false
 }

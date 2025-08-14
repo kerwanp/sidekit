@@ -1,0 +1,8 @@
+{
+  "name": "Sidekit",
+  "description": "AI Guidelines for using Sidekit",
+  "presets": {
+    "recommended": ["sidekit:documentation", "sidekit:automation"]
+  },
+  "rules": []
+}

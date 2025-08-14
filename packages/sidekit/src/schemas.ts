@@ -13,11 +13,13 @@ const kit = z.object({
   name: z.string(),
   description: z.string(),
   rules: z.array(rule),
+  presets: z.record(z.string(), z.array(z.string())),
 });
 
 const config = z.object({
   agent: z.enum(["claude", "opencode"]),
   rules: z.array(z.string()),
+  presets: z.array(z.string()),
 });
 
 export const schemas = {

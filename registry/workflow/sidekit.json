@@ -1,6 +1,7 @@
 {
   "name": "Workflow",
   "description": "Set of rules for improved workflow",
+  "presets": [],
   "rules": [
     {
       "parent": "workflow",
