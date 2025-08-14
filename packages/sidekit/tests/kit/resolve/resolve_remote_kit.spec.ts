@@ -6,7 +6,7 @@ test.group("resolveRemoteKit", () => {
     const kit = await resolveRemoteKit("adonisjs");
 
     expect(kit).toMatchObject({
-      name: "Test", // TODO: Change once updated
+      name: "AdonisJS",
     });
   });
 

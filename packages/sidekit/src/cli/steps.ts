@@ -19,6 +19,14 @@ export const steps = {
           label: "Claude code",
           value: "claude",
         },
+        {
+          label: "Cursor",
+          value: "cursor",
+        },
+        {
+          label: "Copilot",
+          value: "copilot",
+        },
       ],
     });
 

@@ -10,6 +10,7 @@ const rule = z.object({
 });
 
 const kit = z.object({
+  $schema: z.string().optional(),
   name: z.string(),
   description: z.string().optional(),
   rules: z.array(rule),
@@ -18,7 +19,7 @@ const kit = z.object({
 
 const config = z.object({
   $schema: z.string().optional(),
-  agents: z.array(z.enum(["claude", "opencode"])),
+  agents: z.array(z.enum(["claude", "opencode", "copilot", "cursor"])),
   rules: z.array(z.string()),
   presets: z.array(z.string()),
 });
