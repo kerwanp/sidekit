@@ -15,27 +15,27 @@ Middleware MUST be placed in `app/middleware/` and follow these patterns:
 
 ```typescript
 // app/middleware/auth_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
 
 export default class AuthMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
     // Downstream logic (before route handler)
-    const { auth, response } = ctx
-    
+    const { auth, response } = ctx;
+
     try {
-      await auth.check()
+      await auth.check();
     } catch {
-      return response.unauthorized({ error: 'Unauthorized access' })
+      return response.unauthorized({ error: "Unauthorized access" });
     }
 
     // Continue to next middleware or route handler
-    const result = await next()
+    const result = await next();
 
     // Upstream logic (after route handler)
     // Optional: Modify response or perform cleanup
-    
-    return result
+
+    return result;
   }
 }
 ```
@@ -44,26 +44,22 @@ export default class AuthMiddleware {
 
 ```typescript
 // app/middleware/role_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
 
 export default class RoleMiddleware {
-  async handle(
-    ctx: HttpContext,
-    next: NextFn,
-    options: { roles: string[] }
-  ) {
-    const { auth, response } = ctx
-    const user = auth.getUserOrFail()
+  async handle(ctx: HttpContext, next: NextFn, options: { roles: string[] }) {
+    const { auth, response } = ctx;
+    const user = auth.getUserOrFail();
 
     if (!options.roles.includes(user.role)) {
-      return response.forbidden({ 
-        error: 'Insufficient permissions',
-        required_roles: options.roles 
-      })
+      return response.forbidden({
+        error: "Insufficient permissions",
+        required_roles: options.roles,
+      });
     }
 
-    return await next()
+    return await next();
   }
 }
 ```
@@ -74,55 +70,61 @@ Middleware must be registered in `start/kernel.ts`:
 
 ```typescript
 // start/kernel.ts
-import router from '@adonisjs/core/services/router'
-import server from '@adonisjs/core/services/server'
+import router from "@adonisjs/core/services/router";
+import server from "@adonisjs/core/services/server";
 
 // ✅ Correct: Server middleware (runs on every request)
 server.use([
-  () => import('@adonisjs/cors/cors_middleware'),
-  () => import('@adonisjs/static/static_middleware'),
-])
+  () => import("@adonisjs/cors/cors_middleware"),
+  () => import("@adonisjs/static/static_middleware"),
+]);
 
 // ✅ Correct: Router middleware (runs on matched routes)
 router.use([
-  () => import('@adonisjs/core/bodyparser_middleware'),
-  () => import('@adonisjs/session/session_middleware'),
-])
+  () => import("@adonisjs/core/bodyparser_middleware"),
+  () => import("@adonisjs/session/session_middleware"),
+]);
 
 // ✅ Correct: Named middleware registration
 export const middleware = router.named({
-  auth: () => import('#middleware/auth_middleware'),
-  guest: () => import('#middleware/guest_middleware'),
-  role: () => import('#middleware/role_middleware'),
-  throttle: () => import('#middleware/throttle_middleware'),
-  cors: () => import('#middleware/cors_middleware'),
-})
+  auth: () => import("#middleware/auth_middleware"),
+  guest: () => import("#middleware/guest_middleware"),
+  role: () => import("#middleware/role_middleware"),
+  throttle: () => import("#middleware/throttle_middleware"),
+  cors: () => import("#middleware/cors_middleware"),
+});
 ```
 
 ### Middleware Usage
 
 ```typescript
 // start/routes.ts
-import router from '@adonisjs/core/services/router'
-import { middleware } from './kernel.js'
+import router from "@adonisjs/core/services/router";
+import { middleware } from "./kernel.js";
 
 // ✅ Correct: Single middleware
-router.get('profile', '#controllers/users_controller.profile')
-  .middleware([middleware.auth()])
+router
+  .get("profile", "#controllers/users_controller.profile")
+  .middleware([middleware.auth()]);
 
 // ✅ Correct: Multiple middleware
-router.post('admin/users', '#controllers/admin/users_controller.store')
-  .middleware([middleware.auth(), middleware.role({ roles: ['admin'] })])
+router
+  .post("admin/users", "#controllers/admin/users_controller.store")
+  .middleware([middleware.auth(), middleware.role({ roles: ["admin"] })]);
 
 // ✅ Correct: Route group with middleware
-router.group(() => {
-  router.resource('posts', '#controllers/posts_controller')
-  router.resource('comments', '#controllers/comments_controller')
-}).prefix('api').middleware([middleware.auth()])
+router
+  .group(() => {
+    router.resource("posts", "#controllers/posts_controller");
+    router.resource("comments", "#controllers/comments_controller");
+  })
+  .prefix("api")
+  .middleware([middleware.auth()]);
 
 // ✅ Correct: Conditional middleware
-router.get('public-data', '#controllers/data_controller.public')
-  .middleware([middleware.throttle({ max: 100, duration: '1m' })])
+router
+  .get("public-data", "#controllers/data_controller.public")
+  .middleware([middleware.throttle({ max: 100, duration: "1m" })]);
 ```
 
 ### Common Middleware Patterns
@@ -131,27 +133,26 @@ router.get('public-data', '#controllers/data_controller.public')
 
 ```typescript
 // app/middleware/auth_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
 
 export default class AuthMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
-    const { auth, response } = ctx
+    const { auth, response } = ctx;
 
     try {
-      await auth.check()
-      
+      await auth.check();
+
       // Optional: Add user to context for easy access
-      ctx.user = auth.user!
-      
+      ctx.user = auth.user!;
     } catch {
       return response.unauthorized({
-        error: 'Authentication required',
-        code: 'UNAUTHORIZED'
-      })
+        error: "Authentication required",
+        code: "UNAUTHORIZED",
+      });
     }
 
-    return await next()
+    return await next();
   }
 }
 ```
@@ -160,40 +161,42 @@ export default class AuthMiddleware {
 
 ```typescript
 // app/middleware/throttle_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
-import redis from '@adonisjs/redis/services/main'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
+import redis from "@adonisjs/redis/services/main";
 
 export default class ThrottleMiddleware {
   async handle(
     ctx: HttpContext,
     next: NextFn,
-    options: { max: number; duration: string }
+    options: { max: number; duration: string },
   ) {
-    const { request, response } = ctx
-    const key = `throttle:${request.ip()}:${request.url()}`
-    
-    const attempts = await redis.get(key)
-    const maxAttempts = options.max
-    
+    const { request, response } = ctx;
+    const key = `throttle:${request.ip()}:${request.url()}`;
+
+    const attempts = await redis.get(key);
+    const maxAttempts = options.max;
+
     if (attempts && parseInt(attempts) >= maxAttempts) {
       return response.tooManyRequests({
-        error: 'Rate limit exceeded'
-      })
+        error: "Rate limit exceeded",
+      });
     }
 
     // Increment counter
-    const ttl = options.duration === '1h' ? 3600 : 60 // Simple duration parsing
-    await redis.setex(key, ttl, attempts ? parseInt(attempts) + 1 : 1)
+    const ttl = options.duration === "1h" ? 3600 : 60; // Simple duration parsing
+    await redis.setex(key, ttl, attempts ? parseInt(attempts) + 1 : 1);
 
-    const result = await next()
+    const result = await next();
 
     // Add rate limit headers
-    response.header('X-RateLimit-Limit', maxAttempts.toString())
-    response.header('X-RateLimit-Remaining', 
-      (maxAttempts - parseInt(attempts || '0') - 1).toString())
+    response.header("X-RateLimit-Limit", maxAttempts.toString());
+    response.header(
+      "X-RateLimit-Remaining",
+      (maxAttempts - parseInt(attempts || "0") - 1).toString(),
+    );
 
-    return result
+    return result;
   }
 }
 ```
@@ -202,32 +205,37 @@ export default class ThrottleMiddleware {
 
 ```typescript
 // app/middleware/cors_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
 
 export default class CorsMiddleware {
   async handle(
     ctx: HttpContext,
     next: NextFn,
     options: {
-      origin?: string
-      methods?: string[]
-    } = {}
+      origin?: string;
+      methods?: string[];
+    } = {},
   ) {
-    const { request, response } = ctx
-    
+    const { request, response } = ctx;
+
     // Set CORS headers
-    response.header('Access-Control-Allow-Origin', options.origin || '*')
-    response.header('Access-Control-Allow-Methods', 
-      options.methods?.join(', ') || 'GET, POST, PUT, DELETE')
-    response.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    response.header("Access-Control-Allow-Origin", options.origin || "*");
+    response.header(
+      "Access-Control-Allow-Methods",
+      options.methods?.join(", ") || "GET, POST, PUT, DELETE",
+    );
+    response.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization",
+    );
 
     // Handle preflight requests
-    if (request.method() === 'OPTIONS') {
-      return response.status(204).send('')
+    if (request.method() === "OPTIONS") {
+      return response.status(204).send("");
     }
 
-    return await next()
+    return await next();
   }
 }
 ```
@@ -236,44 +244,44 @@ export default class CorsMiddleware {
 
 ```typescript
 // app/middleware/logger_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
-import logger from '@adonisjs/core/services/logger'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
+import logger from "@adonisjs/core/services/logger";
 
 export default class LoggerMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
-    const { request } = ctx
-    const startTime = Date.now()
-    
+    const { request } = ctx;
+    const startTime = Date.now();
+
     // Log incoming request
-    logger.info('Request started', {
+    logger.info("Request started", {
       method: request.method(),
       url: request.url(),
-      ip: request.ip()
-    })
+      ip: request.ip(),
+    });
 
     try {
-      const result = await next()
-      
+      const result = await next();
+
       // Log successful response
-      const duration = Date.now() - startTime
-      logger.info('Request completed', {
+      const duration = Date.now() - startTime;
+      logger.info("Request completed", {
         method: request.method(),
         url: request.url(),
         status: ctx.response.getStatus(),
-        duration: `${duration}ms`
-      })
+        duration: `${duration}ms`,
+      });
 
-      return result
+      return result;
     } catch (error) {
       // Log error
-      logger.error('Request failed', {
+      logger.error("Request failed", {
         method: request.method(),
         url: request.url(),
-        error: error.message
-      })
-      
-      throw error
+        error: error.message,
+      });
+
+      throw error;
     }
   }
 }
@@ -283,35 +291,30 @@ export default class LoggerMiddleware {
 
 ```typescript
 // app/middleware/validate_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
-import vine from '@vinejs/vine'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
+import vine from "@vinejs/vine";
 
 export default class ValidateMiddleware {
-  async handle(
-    ctx: HttpContext,
-    next: NextFn,
-    options: { schema: any }
-  ) {
-    const { request, response } = ctx
-    
+  async handle(ctx: HttpContext, next: NextFn, options: { schema: any }) {
+    const { request, response } = ctx;
+
     try {
       const validatedData = await vine.validate({
         schema: options.schema,
-        data: request.all()
-      })
+        data: request.all(),
+      });
 
       // Add validated data to context
-      ctx.validatedData = validatedData
-
+      ctx.validatedData = validatedData;
     } catch (error) {
       return response.badRequest({
-        error: 'Validation failed',
-        messages: error.messages
-      })
+        error: "Validation failed",
+        messages: error.messages,
+      });
     }
 
-    return await next()
+    return await next();
   }
 }
 ```
@@ -320,52 +323,52 @@ export default class ValidateMiddleware {
 
 ```typescript
 // tests/unit/middleware/auth_middleware.spec.ts
-import { test } from '@japa/runner'
-import { HttpContextFactory } from '@adonisjs/core/factories/http'
-import AuthMiddleware from '#middleware/auth_middleware'
+import { test } from "@japa/runner";
+import { HttpContextFactory } from "@adonisjs/core/factories/http";
+import AuthMiddleware from "#middleware/auth_middleware";
 
-test.group('Auth Middleware', () => {
-  test('should allow authenticated users', async ({ assert }) => {
-    const ctx = new HttpContextFactory().create()
-    const middleware = new AuthMiddleware()
-    
+test.group("Auth Middleware", () => {
+  test("should allow authenticated users", async ({ assert }) => {
+    const ctx = new HttpContextFactory().create();
+    const middleware = new AuthMiddleware();
+
     // Mock authenticated user
-    ctx.auth.user = { id: 1, email: 'test@example.com' }
-    ctx.auth.check = async () => true
+    ctx.auth.user = { id: 1, email: "test@example.com" };
+    ctx.auth.check = async () => true;
 
-    let nextCalled = false
+    let nextCalled = false;
     const next = async () => {
-      nextCalled = true
-      return 'success'
-    }
+      nextCalled = true;
+      return "success";
+    };
 
-    const result = await middleware.handle(ctx, next)
+    const result = await middleware.handle(ctx, next);
 
-    assert.isTrue(nextCalled)
-    assert.equal(result, 'success')
-  })
+    assert.isTrue(nextCalled);
+    assert.equal(result, "success");
+  });
 
-  test('should reject unauthenticated users', async ({ assert }) => {
-    const ctx = new HttpContextFactory().create()
-    const middleware = new AuthMiddleware()
-    
+  test("should reject unauthenticated users", async ({ assert }) => {
+    const ctx = new HttpContextFactory().create();
+    const middleware = new AuthMiddleware();
+
     // Mock unauthenticated user
-    ctx.auth.check = async () => { 
-      throw new Error('Unauthenticated') 
-    }
+    ctx.auth.check = async () => {
+      throw new Error("Unauthenticated");
+    };
 
-    let nextCalled = false
+    let nextCalled = false;
     const next = async () => {
-      nextCalled = true
-      return 'success'
-    }
+      nextCalled = true;
+      return "success";
+    };
 
-    await middleware.handle(ctx, next)
+    await middleware.handle(ctx, next);
 
-    assert.isFalse(nextCalled)
-    assert.equal(ctx.response.getStatus(), 401)
-  })
-})
+    assert.isFalse(nextCalled);
+    assert.equal(ctx.response.getStatus(), 401);
+  });
+});
 ```
 
 ### Middleware Best Practices
@@ -413,22 +416,22 @@ async handle(ctx: any, next: any, options?: any) {
 ```typescript
 // ✅ Correct: Use server middleware for cross-cutting concerns
 server.use([
-  () => import('@adonisjs/cors/cors_middleware'),    // CORS for all routes
-  () => import('#middleware/logger_middleware'),      // Logging for all requests
-])
+  () => import("@adonisjs/cors/cors_middleware"), // CORS for all routes
+  () => import("#middleware/logger_middleware"), // Logging for all requests
+]);
 
 // ✅ Correct: Use router middleware for route-specific logic
 router.use([
-  () => import('@adonisjs/core/bodyparser_middleware'), // Parse request body
-  () => import('@adonisjs/session/session_middleware'), // Session handling
-])
+  () => import("@adonisjs/core/bodyparser_middleware"), // Parse request body
+  () => import("@adonisjs/session/session_middleware"), // Session handling
+]);
 
 // ✅ Correct: Use named middleware for optional features
 export const middleware = router.named({
-  auth: () => import('#middleware/auth_middleware'),     // Authentication
-  admin: () => import('#middleware/admin_middleware'),   // Admin access
-  throttle: () => import('#middleware/throttle_middleware'), // Rate limiting
-})
+  auth: () => import("#middleware/auth_middleware"), // Authentication
+  admin: () => import("#middleware/admin_middleware"), // Admin access
+  throttle: () => import("#middleware/throttle_middleware"), // Rate limiting
+});
 ```
 
 ### Sources

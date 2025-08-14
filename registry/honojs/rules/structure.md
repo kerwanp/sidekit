@@ -58,42 +58,42 @@ root/
 #### Main Entry Point (src/index.ts)
 
 ```typescript
-import { serve } from '@hono/node-server'
-import app from './app'
+import { serve } from "@hono/node-server";
+import app from "./app";
 
-const port = process.env.PORT || 3000
+const port = process.env.PORT || 3000;
 
 serve({
   fetch: app.fetch,
-  port: Number(port)
-})
+  port: Number(port),
+});
 
-console.log(`Server running on port ${port}`)
+console.log(`Server running on port ${port}`);
 ```
 
 #### App Configuration (src/app.ts)
 
 ```typescript
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import { logger } from 'hono/logger'
-import users from './routes/users'
-import posts from './routes/posts'
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { logger } from "hono/logger";
+import users from "./routes/users";
+import posts from "./routes/posts";
 
-const app = new Hono()
+const app = new Hono();
 
 // Global middleware
-app.use('*', logger())
-app.use('*', cors())
+app.use("*", logger());
+app.use("*", cors());
 
 // Route mounting
-app.route('/api/users', users)
-app.route('/api/posts', posts)
+app.route("/api/users", users);
+app.route("/api/posts", posts);
 
 // Health check
-app.get('/health', (c) => c.json({ status: 'ok' }))
+app.get("/health", (c) => c.json({ status: "ok" }));
 
-export default app
+export default app;
 ```
 
 ### Sources

@@ -13,30 +13,37 @@ Environment variables MUST be validated in `start/env.ts`:
 
 ```typescript
 // start/env.ts
-import { Env } from '@adonisjs/core/env'
+import { Env } from "@adonisjs/core/env";
 
-export default await Env.create(new URL('../', import.meta.url), {
+export default await Env.create(new URL("../", import.meta.url), {
   // ✅ App configuration
-  NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
+  NODE_ENV: Env.schema.enum(["development", "production", "test"] as const),
   PORT: Env.schema.number(),
   APP_KEY: Env.schema.string(),
-  HOST: Env.schema.string({ format: 'host' }),
-  LOG_LEVEL: Env.schema.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']),
+  HOST: Env.schema.string({ format: "host" }),
+  LOG_LEVEL: Env.schema.enum([
+    "fatal",
+    "error",
+    "warn",
+    "info",
+    "debug",
+    "trace",
+  ]),
 
   // ✅ Database configuration
-  DB_HOST: Env.schema.string({ format: 'host' }),
+  DB_HOST: Env.schema.string({ format: "host" }),
   DB_PORT: Env.schema.number(),
   DB_USER: Env.schema.string(),
   DB_PASSWORD: Env.schema.string.optional(),
   DB_DATABASE: Env.schema.string(),
 
   // ✅ Redis configuration
-  REDIS_HOST: Env.schema.string({ format: 'host' }),
+  REDIS_HOST: Env.schema.string({ format: "host" }),
   REDIS_PORT: Env.schema.number(),
   REDIS_PASSWORD: Env.schema.string.optional(),
 
   // ✅ Email configuration
-  SMTP_HOST: Env.schema.string({ format: 'host' }),
+  SMTP_HOST: Env.schema.string({ format: "host" }),
   SMTP_PORT: Env.schema.number(),
   SMTP_USERNAME: Env.schema.string.optional(),
   SMTP_PASSWORD: Env.schema.string.optional(),
@@ -64,10 +71,10 @@ export default await Env.create(new URL('../', import.meta.url), {
   MAINTENANCE_MODE: Env.schema.boolean.optional(),
 
   // ✅ Security settings
-  SESSION_DRIVER: Env.schema.enum(['cookie', 'memory', 'redis'] as const),
+  SESSION_DRIVER: Env.schema.enum(["cookie", "memory", "redis"] as const),
   CORS_ENABLED: Env.schema.boolean(),
   RATE_LIMIT_ENABLED: Env.schema.boolean.optional(),
-})
+});
 ```
 
 ### Environment File Structure
@@ -172,121 +179,121 @@ Configuration files MUST use environment variables:
 
 ```typescript
 // config/app.ts
-import env from '#start/env'
+import env from "#start/env";
 
 export default {
   // ✅ App settings
-  appKey: env.get('APP_KEY'),
+  appKey: env.get("APP_KEY"),
   http: {
-    host: env.get('HOST'),
-    port: env.get('PORT'),
-    trustProxy: env.get('NODE_ENV') === 'production'
+    host: env.get("HOST"),
+    port: env.get("PORT"),
+    trustProxy: env.get("NODE_ENV") === "production",
   },
 
   // ✅ Debug settings
-  debug: env.get('ENABLE_DEBUG_MODE', false),
-  
+  debug: env.get("ENABLE_DEBUG_MODE", false),
+
   // ✅ Feature flags
   features: {
-    analytics: env.get('ENABLE_ANALYTICS', true),
-    maintenanceMode: env.get('MAINTENANCE_MODE', false)
-  }
-}
+    analytics: env.get("ENABLE_ANALYTICS", true),
+    maintenanceMode: env.get("MAINTENANCE_MODE", false),
+  },
+};
 ```
 
 ```typescript
 // config/database.ts
-import env from '#start/env'
+import env from "#start/env";
 
 export default {
-  connection: env.get('DB_CONNECTION', 'pg'),
-  
+  connection: env.get("DB_CONNECTION", "pg"),
+
   connections: {
     pg: {
-      client: 'pg',
+      client: "pg",
       connection: {
-        host: env.get('DB_HOST'),
-        port: env.get('DB_PORT'),
-        user: env.get('DB_USER'),
-        password: env.get('DB_PASSWORD'),
-        database: env.get('DB_DATABASE'),
+        host: env.get("DB_HOST"),
+        port: env.get("DB_PORT"),
+        user: env.get("DB_USER"),
+        password: env.get("DB_PASSWORD"),
+        database: env.get("DB_DATABASE"),
       },
       migrations: {
         naturalSort: true,
-        paths: ['./database/migrations']
+        paths: ["./database/migrations"],
       },
-      debug: env.get('NODE_ENV') === 'development'
-    }
-  }
-}
+      debug: env.get("NODE_ENV") === "development",
+    },
+  },
+};
 ```
 
 ```typescript
 // config/redis.ts
-import env from '#start/env'
+import env from "#start/env";
 
 export default {
-  connection: 'main',
-  
+  connection: "main",
+
   connections: {
     main: {
-      host: env.get('REDIS_HOST'),
-      port: env.get('REDIS_PORT'),
-      password: env.get('REDIS_PASSWORD', ''),
+      host: env.get("REDIS_HOST"),
+      port: env.get("REDIS_PORT"),
+      password: env.get("REDIS_PASSWORD", ""),
       db: 0,
-      keyPrefix: ''
-    }
-  }
-}
+      keyPrefix: "",
+    },
+  },
+};
 ```
 
 ### Using Environment Variables
 
 ```typescript
 // ✅ In services
-import env from '#start/env'
+import env from "#start/env";
 
 export default class EmailService {
   private config = {
-    host: env.get('SMTP_HOST'),
-    port: env.get('SMTP_PORT'),
-    username: env.get('SMTP_USERNAME'),
-    password: env.get('SMTP_PASSWORD')
-  }
+    host: env.get("SMTP_HOST"),
+    port: env.get("SMTP_PORT"),
+    username: env.get("SMTP_USERNAME"),
+    password: env.get("SMTP_PASSWORD"),
+  };
 
   async sendEmail(to: string, subject: string, body: string) {
     if (!this.config.host) {
-      throw new Error('SMTP configuration is missing')
+      throw new Error("SMTP configuration is missing");
     }
     // Send email logic
   }
 }
 
 // ✅ In controllers with feature flags
-import env from '#start/env'
+import env from "#start/env";
 
 export default class AnalyticsController {
   async track({ request, response }: HttpContext) {
-    if (!env.get('ENABLE_ANALYTICS')) {
-      return response.noContent()
+    if (!env.get("ENABLE_ANALYTICS")) {
+      return response.noContent();
     }
 
     // Track analytics
-    return response.json({ tracked: true })
+    return response.json({ tracked: true });
   }
 }
 
 // ✅ In middleware
 export default class MaintenanceMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
-    if (env.get('MAINTENANCE_MODE')) {
+    if (env.get("MAINTENANCE_MODE")) {
       return ctx.response.status(503).json({
-        error: 'Service temporarily unavailable',
-        message: 'The application is under maintenance'
-      })
+        error: "Service temporarily unavailable",
+        message: "The application is under maintenance",
+      });
     }
 
-    return await next()
+    return await next();
   }
 }
 ```
@@ -295,44 +302,45 @@ export default class MaintenanceMiddleware {
 
 ```typescript
 // config/cors.ts
-import env from '#start/env'
+import env from "#start/env";
 
 export default {
-  enabled: env.get('CORS_ENABLED'),
-  
+  enabled: env.get("CORS_ENABLED"),
+
   // ✅ Different origins per environment
-  origin: env.get('NODE_ENV') === 'production' 
-    ? ['https://yourdomain.com', 'https://app.yourdomain.com']
-    : true,
-    
-  methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'],
+  origin:
+    env.get("NODE_ENV") === "production"
+      ? ["https://yourdomain.com", "https://app.yourdomain.com"]
+      : true,
+
+  methods: ["GET", "HEAD", "POST", "PUT", "DELETE"],
   headers: true,
   exposeHeaders: [],
   credentials: true,
-  maxAge: false
-}
+  maxAge: false,
+};
 ```
 
 ```typescript
 // config/session.ts
-import env from '#start/env'
+import env from "#start/env";
 
 export default {
-  driver: env.get('SESSION_DRIVER'),
-  
-  cookieName: 'adonis-session',
+  driver: env.get("SESSION_DRIVER"),
+
+  cookieName: "adonis-session",
   clearWithBrowser: false,
-  
+
   // ✅ Secure cookies in production
   cookie: {
-    domain: env.get('NODE_ENV') === 'production' ? '.yourdomain.com' : '',
-    path: '/',
-    maxAge: '2h',
+    domain: env.get("NODE_ENV") === "production" ? ".yourdomain.com" : "",
+    path: "/",
+    maxAge: "2h",
     httpOnly: true,
-    secure: env.get('NODE_ENV') === 'production',
+    secure: env.get("NODE_ENV") === "production",
     sameSite: false,
-  }
-}
+  },
+};
 ```
 
 ### Environment Variable Best Practices
@@ -379,15 +387,15 @@ LOG_LEVEL: Env.schema.enum(['debug', 'info', 'warn', 'error']).optional('info')
 // ✅ Correct: Proper validation
 export default class PaymentService {
   constructor() {
-    if (!env.get('STRIPE_SECRET_KEY')) {
-      throw new Error('Stripe configuration is required')
+    if (!env.get("STRIPE_SECRET_KEY")) {
+      throw new Error("Stripe configuration is required");
     }
   }
 
   async processPayment(amount: number) {
-    const stripe = new Stripe(env.get('STRIPE_SECRET_KEY')!, {
-      apiVersion: '2023-10-16'
-    })
+    const stripe = new Stripe(env.get("STRIPE_SECRET_KEY")!, {
+      apiVersion: "2023-10-16",
+    });
     // Process payment
   }
 }
@@ -395,15 +403,15 @@ export default class PaymentService {
 // ✅ Correct: Feature flags
 export default class FeatureService {
   isAnalyticsEnabled(): boolean {
-    return env.get('ENABLE_ANALYTICS', false)
+    return env.get("ENABLE_ANALYTICS", false);
   }
 
   isMaintenanceMode(): boolean {
-    return env.get('MAINTENANCE_MODE', false)
+    return env.get("MAINTENANCE_MODE", false);
   }
 
   getMaxUploadSize(): number {
-    return env.get('MAX_UPLOAD_SIZE', 10485760) // 10MB default
+    return env.get("MAX_UPLOAD_SIZE", 10485760); // 10MB default
   }
 }
 ```
@@ -433,26 +441,26 @@ STRIPE_SECRET_KEY=sk_test_fake_key
 
 ```typescript
 // tests/unit/services/email_service.spec.ts
-import { test } from '@japa/runner'
-import env from '#start/env'
+import { test } from "@japa/runner";
+import env from "#start/env";
 
-test.group('Email Service', () => {
-  test('should handle missing SMTP configuration', async ({ assert }) => {
+test.group("Email Service", () => {
+  test("should handle missing SMTP configuration", async ({ assert }) => {
     // Temporarily override env for test
-    const originalHost = env.get('SMTP_HOST')
-    process.env.SMTP_HOST = ''
-    
-    const emailService = new EmailService()
-    
+    const originalHost = env.get("SMTP_HOST");
+    process.env.SMTP_HOST = "";
+
+    const emailService = new EmailService();
+
     await assert.rejects(
-      () => emailService.sendEmail('test@example.com', 'Test', 'Body'),
-      'SMTP configuration is missing'
-    )
-    
+      () => emailService.sendEmail("test@example.com", "Test", "Body"),
+      "SMTP configuration is missing",
+    );
+
     // Restore original value
-    process.env.SMTP_HOST = originalHost
-  })
-})
+    process.env.SMTP_HOST = originalHost;
+  });
+});
 ```
 
 ### Common Anti-Patterns
@@ -461,30 +469,30 @@ test.group('Email Service', () => {
 // ❌ Incorrect: Hardcoded values
 const config = {
   database: {
-    host: 'localhost',
+    host: "localhost",
     port: 5432,
-    user: 'postgres'
-  }
-}
+    user: "postgres",
+  },
+};
 
 // ❌ Incorrect: Direct process.env access
-const apiKey = process.env.API_KEY
-const port = parseInt(process.env.PORT || '3333')
+const apiKey = process.env.API_KEY;
+const port = parseInt(process.env.PORT || "3333");
 
 // ❌ Incorrect: No validation
-const requiredValue = env.get('REQUIRED_VALUE') // Could be undefined
+const requiredValue = env.get("REQUIRED_VALUE"); // Could be undefined
 
 // ❌ Incorrect: Exposing secrets in logs
-console.log('Database config:', {
-  host: env.get('DB_HOST'),
-  password: env.get('DB_PASSWORD') // Don't log passwords!
-})
+console.log("Database config:", {
+  host: env.get("DB_HOST"),
+  password: env.get("DB_PASSWORD"), // Don't log passwords!
+});
 
 // ✅ Correct: Safe logging
-console.log('Database config:', {
-  host: env.get('DB_HOST'),
-  password: env.get('DB_PASSWORD') ? '***' : undefined
-})
+console.log("Database config:", {
+  host: env.get("DB_HOST"),
+  password: env.get("DB_PASSWORD") ? "***" : undefined,
+});
 ```
 
 ### Environment Variable Documentation

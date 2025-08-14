@@ -52,31 +52,31 @@ NEW_RELIC_LICENSE_KEY=your-new-relic-key
 
 ```typescript
 // config/app.ts
-import env from '#start/env'
+import env from "#start/env";
 
 export default {
-  appKey: env.get('APP_KEY'),
+  appKey: env.get("APP_KEY"),
   http: {
-    host: env.get('HOST'),
-    port: env.get('PORT'),
+    host: env.get("HOST"),
+    port: env.get("PORT"),
     // ✅ Trust proxy in production
-    trustProxy: env.get('NODE_ENV') === 'production',
+    trustProxy: env.get("NODE_ENV") === "production",
     cookie: {
       // ✅ Secure cookies in production
-      secure: env.get('NODE_ENV') === 'production',
-      sameSite: 'strict',
-      httpOnly: true
-    }
+      secure: env.get("NODE_ENV") === "production",
+      sameSite: "strict",
+      httpOnly: true,
+    },
   },
-  
+
   // ✅ Disable debug in production
-  debug: env.get('NODE_ENV') !== 'production',
-  
+  debug: env.get("NODE_ENV") !== "production",
+
   // ✅ Production optimizations
   profiler: {
-    enabled: env.get('NODE_ENV') === 'development'
-  }
-}
+    enabled: env.get("NODE_ENV") === "development",
+  },
+};
 ```
 
 ### Docker Deployment
@@ -139,7 +139,7 @@ CMD ["node", "bin/server.js"]
 
 ```yaml
 # docker-compose.yml
-version: '3.8'
+version: "3.8"
 
 services:
   app:
@@ -213,7 +213,7 @@ http {
     server {
         listen 80;
         server_name yourdomain.com www.yourdomain.com;
-        
+
         # Redirect HTTP to HTTPS
         return 301 https://$server_name$request_uri;
     }
@@ -299,7 +299,7 @@ http {
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
-            
+
             # WebSocket support
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
@@ -353,8 +353,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: "18"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -424,18 +424,18 @@ jobs:
 
 ```typescript
 // app/controllers/health_controller.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import Database from '@adonisjs/lucid/services/db'
-import redis from '@adonisjs/redis/services/main'
+import type { HttpContext } from "@adonisjs/core/http";
+import Database from "@adonisjs/lucid/services/db";
+import redis from "@adonisjs/redis/services/main";
 
 export default class HealthController {
   // ✅ Basic health check
   async index({ response }: HttpContext) {
     return response.json({
-      status: 'ok',
+      status: "ok",
       timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version || '1.0.0'
-    })
+      version: process.env.npm_package_version || "1.0.0",
+    });
   }
 
   // ✅ Detailed health check
@@ -444,72 +444,84 @@ export default class HealthController {
       this.checkDatabase(),
       this.checkRedis(),
       this.checkMemory(),
-      this.checkDisk()
-    ])
+      this.checkDisk(),
+    ]);
 
     const results = {
-      database: checks[0].status === 'fulfilled' ? checks[0].value : { status: 'error', error: checks[0].reason?.message },
-      redis: checks[1].status === 'fulfilled' ? checks[1].value : { status: 'error', error: checks[1].reason?.message },
-      memory: checks[2].status === 'fulfilled' ? checks[2].value : { status: 'error', error: checks[2].reason?.message },
-      disk: checks[3].status === 'fulfilled' ? checks[3].value : { status: 'error', error: checks[3].reason?.message }
-    }
+      database:
+        checks[0].status === "fulfilled"
+          ? checks[0].value
+          : { status: "error", error: checks[0].reason?.message },
+      redis:
+        checks[1].status === "fulfilled"
+          ? checks[1].value
+          : { status: "error", error: checks[1].reason?.message },
+      memory:
+        checks[2].status === "fulfilled"
+          ? checks[2].value
+          : { status: "error", error: checks[2].reason?.message },
+      disk:
+        checks[3].status === "fulfilled"
+          ? checks[3].value
+          : { status: "error", error: checks[3].reason?.message },
+    };
 
-    const overall = Object.values(results).every(check => check.status === 'ok')
+    const overall = Object.values(results).every(
+      (check) => check.status === "ok",
+    );
 
-    return response
-      .status(overall ? 200 : 503)
-      .json({
-        status: overall ? 'ok' : 'error',
-        checks: results,
-        timestamp: new Date().toISOString()
-      })
+    return response.status(overall ? 200 : 503).json({
+      status: overall ? "ok" : "error",
+      checks: results,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   private async checkDatabase() {
-    const start = Date.now()
-    await Database.rawQuery('SELECT 1')
-    const responseTime = Date.now() - start
+    const start = Date.now();
+    await Database.rawQuery("SELECT 1");
+    const responseTime = Date.now() - start;
 
     return {
-      status: 'ok',
+      status: "ok",
       responseTime,
-      message: `Database connected (${responseTime}ms)`
-    }
+      message: `Database connected (${responseTime}ms)`,
+    };
   }
 
   private async checkRedis() {
-    const start = Date.now()
-    await redis.ping()
-    const responseTime = Date.now() - start
+    const start = Date.now();
+    await redis.ping();
+    const responseTime = Date.now() - start;
 
     return {
-      status: 'ok',
+      status: "ok",
       responseTime,
-      message: `Redis connected (${responseTime}ms)`
-    }
+      message: `Redis connected (${responseTime}ms)`,
+    };
   }
 
   private async checkMemory() {
-    const usage = process.memoryUsage()
-    const usedMB = Math.round(usage.heapUsed / 1024 / 1024)
-    const totalMB = Math.round(usage.heapTotal / 1024 / 1024)
+    const usage = process.memoryUsage();
+    const usedMB = Math.round(usage.heapUsed / 1024 / 1024);
+    const totalMB = Math.round(usage.heapTotal / 1024 / 1024);
 
     return {
-      status: 'ok',
+      status: "ok",
       memory: {
         used: `${usedMB}MB`,
         total: `${totalMB}MB`,
-        percentage: Math.round((usage.heapUsed / usage.heapTotal) * 100)
-      }
-    }
+        percentage: Math.round((usage.heapUsed / usage.heapTotal) * 100),
+      },
+    };
   }
 
   private async checkDisk() {
     // Simplified disk check
     return {
-      status: 'ok',
-      message: 'Disk space available'
-    }
+      status: "ok",
+      message: "Disk space available",
+    };
   }
 }
 ```
@@ -518,31 +530,31 @@ export default class HealthController {
 
 ```typescript
 // database/migrations/production_deployment.ts
-import { BaseSchema } from '@adonisjs/lucid/schema'
+import { BaseSchema } from "@adonisjs/lucid/schema";
 
 export default class extends BaseSchema {
-  protected tableName = 'users'
+  protected tableName = "users";
 
   async up() {
     // ✅ Safe migrations for production
     this.schema.alterTable(this.tableName, (table) => {
       // Add columns with defaults
-      table.boolean('email_verified').defaultTo(false)
-      table.timestamp('last_login_at').nullable()
-      
+      table.boolean("email_verified").defaultTo(false);
+      table.timestamp("last_login_at").nullable();
+
       // Create indexes
-      table.index(['email'], 'users_email_index')
-      table.index(['created_at'], 'users_created_at_index')
-    })
+      table.index(["email"], "users_email_index");
+      table.index(["created_at"], "users_created_at_index");
+    });
   }
 
   async down() {
     this.schema.alterTable(this.tableName, (table) => {
-      table.dropIndex(['email'], 'users_email_index')
-      table.dropIndex(['created_at'], 'users_created_at_index')
-      table.dropColumn('email_verified')
-      table.dropColumn('last_login_at')
-    })
+      table.dropIndex(["email"], "users_email_index");
+      table.dropIndex(["created_at"], "users_created_at_index");
+      table.dropColumn("email_verified");
+      table.dropColumn("last_login_at");
+    });
   }
 }
 ```
@@ -551,86 +563,90 @@ export default class extends BaseSchema {
 
 ```typescript
 // config/logger.ts
-import env from '#start/env'
+import env from "#start/env";
 
 export default {
-  default: 'app',
+  default: "app",
 
   loggers: {
     app: {
       enabled: true,
-      name: env.get('APP_NAME'),
-      level: env.get('LOG_LEVEL'),
+      name: env.get("APP_NAME"),
+      level: env.get("LOG_LEVEL"),
       redact: {
-        paths: ['password', 'password_confirmation', 'token', 'secret'],
-        censor: '***'
+        paths: ["password", "password_confirmation", "token", "secret"],
+        censor: "***",
       },
-      
+
       // ✅ Production logging
-      targets: env.get('NODE_ENV') === 'production' ? [
-        {
-          target: 'pino/file',
-          options: {
-            destination: './storage/logs/app.log'
-          },
-          level: 'info'
-        },
-        {
-          target: '@sentry/node',
-          options: {
-            dsn: env.get('SENTRY_DSN')
-          },
-          level: 'error'
-        }
-      ] : [
-        {
-          target: 'pino-pretty',
-          options: {
-            colorize: true
-          }
-        }
-      ]
-    }
-  }
-}
+      targets:
+        env.get("NODE_ENV") === "production"
+          ? [
+              {
+                target: "pino/file",
+                options: {
+                  destination: "./storage/logs/app.log",
+                },
+                level: "info",
+              },
+              {
+                target: "@sentry/node",
+                options: {
+                  dsn: env.get("SENTRY_DSN"),
+                },
+                level: "error",
+              },
+            ]
+          : [
+              {
+                target: "pino-pretty",
+                options: {
+                  colorize: true,
+                },
+              },
+            ],
+    },
+  },
+};
 ```
 
 ### Performance Monitoring
 
 ```typescript
 // app/middleware/performance_monitoring_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
-import logger from '@adonisjs/core/services/logger'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
+import logger from "@adonisjs/core/services/logger";
 
 export default class PerformanceMonitoringMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
-    const start = process.hrtime.bigint()
-    const startMemory = process.memoryUsage().heapUsed
+    const start = process.hrtime.bigint();
+    const startMemory = process.memoryUsage().heapUsed;
 
     try {
-      await next()
+      await next();
     } finally {
-      const end = process.hrtime.bigint()
-      const endMemory = process.memoryUsage().heapUsed
-      
-      const duration = Number(end - start) / 1000000 // Convert to milliseconds
-      const memoryDelta = endMemory - startMemory
+      const end = process.hrtime.bigint();
+      const endMemory = process.memoryUsage().heapUsed;
+
+      const duration = Number(end - start) / 1000000; // Convert to milliseconds
+      const memoryDelta = endMemory - startMemory;
 
       // ✅ Log performance metrics
-      if (duration > 1000) { // Log slow requests
-        logger.warn('Slow request detected', {
+      if (duration > 1000) {
+        // Log slow requests
+        logger.warn("Slow request detected", {
           method: ctx.request.method(),
           url: ctx.request.url(),
           duration: `${duration.toFixed(2)}ms`,
           memoryDelta: `${(memoryDelta / 1024 / 1024).toFixed(2)}MB`,
           statusCode: ctx.response.getStatus(),
-          userId: ctx.auth?.user?.id
-        })
+          userId: ctx.auth?.user?.id,
+        });
       }
 
       // ✅ Add performance headers
-      ctx.response.header('X-Response-Time', `${duration.toFixed(2)}ms`)
+      ctx.response.header("X-Response-Time", `${duration.toFixed(2)}ms`);
     }
   }
 }
@@ -711,7 +727,7 @@ echo "Rollback completed successfully"
 
 ```yaml
 # docker-compose.scale.yml
-version: '3.8'
+version: "3.8"
 
 services:
   app:

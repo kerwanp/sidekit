@@ -58,7 +58,7 @@ root/
 
 - ALWAYS use the `app/` directory for application domain logic
 - Controllers MUST be placed in `app/controllers/`
-- Models MUST be placed in `app/models/`  
+- Models MUST be placed in `app/models/`
 - Middleware MUST be placed in `app/middleware/`
 - Services MUST be placed in `app/services/`
 - Validators MUST be placed in `app/validators/`
@@ -100,12 +100,12 @@ ALWAYS use these import aliases instead of relative paths:
 
 ```typescript
 // ✅ Correct
-import User from '#models/user'
-import UsersController from '#controllers/users_controller'
+import User from "#models/user";
+import UsersController from "#controllers/users_controller";
 
-// ❌ Incorrect  
-import User from '../models/User.js'
-import UsersController from './UsersController.js'
+// ❌ Incorrect
+import User from "../models/User.js";
+import UsersController from "./UsersController.js";
 ```
 
 ### Examples
@@ -114,18 +114,18 @@ import UsersController from './UsersController.js'
 
 ```typescript
 // app/controllers/users_controller.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import User from '#models/user'
+import type { HttpContext } from "@adonisjs/core/http";
+import User from "#models/user";
 
 export default class UsersController {
   async index({ response }: HttpContext) {
-    const users = await User.all()
-    return response.json(users)
+    const users = await User.all();
+    return response.json(users);
   }
 
   async show({ params, response }: HttpContext) {
-    const user = await User.findOrFail(params.id)
-    return response.json(user)
+    const user = await User.findOrFail(params.id);
+    return response.json(user);
   }
 }
 ```
@@ -134,24 +134,24 @@ export default class UsersController {
 
 ```typescript
 // app/services/user_service.ts
-import User from '#models/user'
-import { Exception } from '@adonisjs/core/exceptions'
+import User from "#models/user";
+import { Exception } from "@adonisjs/core/exceptions";
 
 export default class UserService {
   async createUser(data: { email: string; password: string }) {
-    const existingUser = await User.findBy('email', data.email)
+    const existingUser = await User.findBy("email", data.email);
     if (existingUser) {
-      throw new Exception('User already exists', { status: 409 })
+      throw new Exception("User already exists", { status: 409 });
     }
 
-    return await User.create(data)
+    return await User.create(data);
   }
 
   async getUserProfile(userId: number) {
     return await User.query()
-      .where('id', userId)
-      .preload('posts')
-      .firstOrFail()
+      .where("id", userId)
+      .preload("posts")
+      .firstOrFail();
   }
 }
 ```
@@ -160,24 +160,29 @@ export default class UserService {
 
 ```typescript
 // start/routes.ts
-import router from '@adonisjs/core/services/router'
-import { middleware } from './kernel.js'
+import router from "@adonisjs/core/services/router";
+import { middleware } from "./kernel.js";
 
 // API routes
-router.group(() => {
-  router.get('users', '#controllers/users_controller.index')
-  router.post('users', '#controllers/users_controller.store')
-  router.get('users/:id', '#controllers/users_controller.show')
-  router.put('users/:id', '#controllers/users_controller.update')
-  router.delete('users/:id', '#controllers/users_controller.destroy')
-}).prefix('api/v1').middleware([middleware.auth()])
+router
+  .group(() => {
+    router.get("users", "#controllers/users_controller.index");
+    router.post("users", "#controllers/users_controller.store");
+    router.get("users/:id", "#controllers/users_controller.show");
+    router.put("users/:id", "#controllers/users_controller.update");
+    router.delete("users/:id", "#controllers/users_controller.destroy");
+  })
+  .prefix("api/v1")
+  .middleware([middleware.auth()]);
 
 // Auth routes
-router.group(() => {
-  router.post('login', '#controllers/auth_controller.login')
-  router.post('register', '#controllers/auth_controller.register')
-  router.post('logout', '#controllers/auth_controller.logout')
-}).prefix('auth')
+router
+  .group(() => {
+    router.post("login", "#controllers/auth_controller.login");
+    router.post("register", "#controllers/auth_controller.register");
+    router.post("logout", "#controllers/auth_controller.logout");
+  })
+  .prefix("auth");
 ```
 
 ### Sources

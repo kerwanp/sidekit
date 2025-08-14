@@ -17,40 +17,40 @@ export default class PostService {
   // Use eager loading to prevent N+1 queries
   async getPostsWithAuthors() {
     return await Post.query()
-      .preload('author')
-      .preload('comments', (query) => {
-        query.preload('user')
-        query.orderBy('createdAt', 'desc')
-        query.limit(5)
+      .preload("author")
+      .preload("comments", (query) => {
+        query.preload("user");
+        query.orderBy("createdAt", "desc");
+        query.limit(5);
       })
-      .orderBy('createdAt', 'desc')
-      .limit(20)
+      .orderBy("createdAt", "desc")
+      .limit(20);
   }
 
   // Use pagination for large datasets
   async getPostsPaginated(page: number, limit: number = 20) {
     return await Post.query()
-      .preload('author', (query) => {
-        query.select(['id', 'name', 'avatar'])
+      .preload("author", (query) => {
+        query.select(["id", "name", "avatar"]);
       })
-      .paginate(page, limit)
+      .paginate(page, limit);
   }
 
   // Use specific columns selection
   async getPostTitles() {
     return await Post.query()
-      .select(['id', 'title', 'slug', 'publishedAt'])
-      .where('published', true)
-      .orderBy('publishedAt', 'desc')
+      .select(["id", "title", "slug", "publishedAt"])
+      .where("published", true)
+      .orderBy("publishedAt", "desc");
   }
 
   // Use database-level aggregation
   async getPostStats() {
     return await Post.query()
-      .count('* as total')
-      .countDistinct('userId as unique_authors')
-      .where('published', true)
-      .first()
+      .count("* as total")
+      .countDistinct("userId as unique_authors")
+      .where("published", true)
+      .first();
   }
 }
 ```
@@ -76,16 +76,16 @@ CREATE INDEX idx_posts_published_only ON posts(created_at) WHERE published = tru
 ```typescript
 // config/database.ts
 export default {
-  connection: 'pg',
+  connection: "pg",
   connections: {
     pg: {
-      client: 'pg',
+      client: "pg",
       connection: {
-        host: env.get('DB_HOST'),
-        port: env.get('DB_PORT'),
-        user: env.get('DB_USER'),
-        password: env.get('DB_PASSWORD'),
-        database: env.get('DB_DATABASE'),
+        host: env.get("DB_HOST"),
+        port: env.get("DB_PORT"),
+        user: env.get("DB_USER"),
+        password: env.get("DB_PASSWORD"),
+        database: env.get("DB_DATABASE"),
       },
       // ✅ Optimize connection pool
       pool: {
@@ -99,10 +99,10 @@ export default {
         createRetryIntervalMillis: 100,
       },
       // ✅ Enable debugging in development only
-      debug: env.get('NODE_ENV') === 'development',
-    }
-  }
-}
+      debug: env.get("NODE_ENV") === "development",
+    },
+  },
+};
 ```
 
 ### Caching Strategies
@@ -111,49 +111,49 @@ export default {
 
 ```typescript
 // app/services/cache_service.ts
-import redis from '@adonisjs/redis/services/main'
+import redis from "@adonisjs/redis/services/main";
 
 export default class CacheService {
   // ✅ Cache user data
   async getUser(id: number): Promise<User | null> {
-    const cacheKey = `user:${id}`
-    
+    const cacheKey = `user:${id}`;
+
     // Try cache first
-    const cached = await redis.get(cacheKey)
+    const cached = await redis.get(cacheKey);
     if (cached) {
-      return JSON.parse(cached)
+      return JSON.parse(cached);
     }
 
     // Get from database and cache
-    const user = await User.find(id)
+    const user = await User.find(id);
     if (user) {
-      await redis.setex(cacheKey, 3600, JSON.stringify(user))
+      await redis.setex(cacheKey, 3600, JSON.stringify(user));
     }
 
-    return user
+    return user;
   }
 
   // ✅ Cache popular posts
   async getPopularPosts(): Promise<Post[]> {
-    const cacheKey = 'posts:popular'
-    
-    const cached = await redis.get(cacheKey)
+    const cacheKey = "posts:popular";
+
+    const cached = await redis.get(cacheKey);
     if (cached) {
-      return JSON.parse(cached)
+      return JSON.parse(cached);
     }
 
     const posts = await Post.query()
-      .preload('author')
-      .orderBy('views', 'desc')
-      .limit(10)
+      .preload("author")
+      .orderBy("views", "desc")
+      .limit(10);
 
-    await redis.setex(cacheKey, 900, JSON.stringify(posts))
-    return posts
+    await redis.setex(cacheKey, 900, JSON.stringify(posts));
+    return posts;
   }
 
   // ✅ Cache invalidation
   async invalidateUserCache(userId: number) {
-    await redis.del(`user:${userId}`)
+    await redis.del(`user:${userId}`);
   }
 }
 ```
@@ -162,43 +162,39 @@ export default class CacheService {
 
 ```typescript
 // app/middleware/cache_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
-import redis from '@adonisjs/redis/services/main'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
+import redis from "@adonisjs/redis/services/main";
 
 export default class CacheMiddleware {
-  async handle(
-    ctx: HttpContext,
-    next: NextFn,
-    options: { ttl?: number } = {}
-  ) {
-    const { request, response } = ctx
-    
+  async handle(ctx: HttpContext, next: NextFn, options: { ttl?: number } = {}) {
+    const { request, response } = ctx;
+
     // Only cache GET requests
-    if (request.method() !== 'GET') {
-      return await next()
+    if (request.method() !== "GET") {
+      return await next();
     }
 
-    const cacheKey = `http:${request.url()}`
-    const ttl = options.ttl || 300 // 5 minutes
+    const cacheKey = `http:${request.url()}`;
+    const ttl = options.ttl || 300; // 5 minutes
 
     // Check cache
-    const cached = await redis.get(cacheKey)
+    const cached = await redis.get(cacheKey);
     if (cached) {
-      response.header('X-Cache', 'HIT')
-      return response.json(JSON.parse(cached))
+      response.header("X-Cache", "HIT");
+      return response.json(JSON.parse(cached));
     }
 
     // Execute request
-    const result = await next()
+    const result = await next();
 
     // Cache 200 responses
     if (response.getStatus() === 200) {
-      await redis.setex(cacheKey, ttl, JSON.stringify(response.getBody()))
-      response.header('X-Cache', 'MISS')
+      await redis.setex(cacheKey, ttl, JSON.stringify(response.getBody()));
+      response.header("X-Cache", "MISS");
     }
 
-    return result
+    return result;
   }
 }
 ```
@@ -208,20 +204,20 @@ export default class CacheMiddleware {
 ```typescript
 // ✅ Use Maps for caching
 export default class UserService {
-  private userCache = new Map<number, User>()
+  private userCache = new Map<number, User>();
 
   async getUserByEmail(email: string): Promise<User | null> {
-    const user = await User.findBy('email', email)
+    const user = await User.findBy("email", email);
     if (user) {
-      this.userCache.set(user.id, user)
+      this.userCache.set(user.id, user);
     }
-    return user
+    return user;
   }
 
   // ✅ Clean up cache periodically
   private cleanupCache() {
     if (this.userCache.size > 1000) {
-      this.userCache.clear()
+      this.userCache.clear();
     }
   }
 }
@@ -231,28 +227,31 @@ export default class UserService {
 
 ```typescript
 // app/controllers/reports_controller.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import { createReadStream } from 'node:fs'
+import type { HttpContext } from "@adonisjs/core/http";
+import { createReadStream } from "node:fs";
 
 export default class ReportsController {
   // ✅ Stream files instead of loading into memory
   async downloadReport({ response, params }: HttpContext) {
-    const filename = `report-${params.id}.csv`
-    const filepath = `./storage/reports/${filename}`
+    const filename = `report-${params.id}.csv`;
+    const filepath = `./storage/reports/${filename}`;
 
-    response.header('Content-Type', 'text/csv')
-    response.header('Content-Disposition', `attachment; filename="${filename}"`)
-    
-    const stream = createReadStream(filepath)
-    return response.stream(stream)
+    response.header("Content-Type", "text/csv");
+    response.header(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`,
+    );
+
+    const stream = createReadStream(filepath);
+    return response.stream(stream);
   }
 
   // ✅ Process data in chunks
   async generateReport({ response }: HttpContext) {
-    response.header('Content-Type', 'application/json')
-    
-    const users = await User.query().limit(1000)
-    return response.json({ data: users })
+    response.header("Content-Type", "application/json");
+
+    const users = await User.query().limit(1000);
+    return response.json({ data: users });
   }
 }
 ```
@@ -266,53 +265,54 @@ export default class ReportsController {
 export default class PostsController {
   // ✅ Implement field selection
   async index({ request, response }: HttpContext) {
-    const fields = request.input('fields', '').split(',').filter(Boolean)
-    const query = Post.query()
+    const fields = request.input("fields", "").split(",").filter(Boolean);
+    const query = Post.query();
 
     if (fields.length > 0) {
       // Only select requested fields
-      query.select(fields)
+      query.select(fields);
     }
 
     // ✅ Implement cursor-based pagination for better performance
-    const cursor = request.input('cursor')
-    const limit = Math.min(request.input('limit', 20), 100)
+    const cursor = request.input("cursor");
+    const limit = Math.min(request.input("limit", 20), 100);
 
     if (cursor) {
-      query.where('id', '>', cursor)
+      query.where("id", ">", cursor);
     }
 
     const posts = await query
-      .preload('author', (authorQuery) => {
-        authorQuery.select(['id', 'name', 'avatar'])
+      .preload("author", (authorQuery) => {
+        authorQuery.select(["id", "name", "avatar"]);
       })
-      .orderBy('id', 'asc')
-      .limit(limit)
+      .orderBy("id", "asc")
+      .limit(limit);
 
-    const nextCursor = posts.length === limit ? posts[posts.length - 1].id : null
+    const nextCursor =
+      posts.length === limit ? posts[posts.length - 1].id : null;
 
     return response.json({
       data: posts,
       pagination: {
         nextCursor,
-        hasMore: posts.length === limit
-      }
-    })
+        hasMore: posts.length === limit,
+      },
+    });
   }
 
   // ✅ Implement ETags for caching
   async show({ params, response }: HttpContext) {
     const post = await Post.query()
-      .where('id', params.id)
-      .preload('author')
-      .firstOrFail()
+      .where("id", params.id)
+      .preload("author")
+      .firstOrFail();
 
     // Generate ETag based on updated timestamp
-    const etag = `"${post.updatedAt.toMillis()}"`
-    response.header('ETag', etag)
-    response.header('Cache-Control', 'max-age=300') // 5 minutes
+    const etag = `"${post.updatedAt.toMillis()}"`;
+    response.header("ETag", etag);
+    response.header("Cache-Control", "max-age=300"); // 5 minutes
 
-    return response.json({ data: post })
+    return response.json({ data: post });
   }
 }
 ```
@@ -321,42 +321,42 @@ export default class PostsController {
 
 ```typescript
 // app/middleware/compression_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
-import { gzip, deflate } from 'node:zlib'
-import { promisify } from 'node:util'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
+import { gzip, deflate } from "node:zlib";
+import { promisify } from "node:util";
 
 export default class CompressionMiddleware {
-  private gzipAsync = promisify(gzip)
-  private deflateAsync = promisify(deflate)
+  private gzipAsync = promisify(gzip);
+  private deflateAsync = promisify(deflate);
 
   async handle(ctx: HttpContext, next: NextFn) {
-    await next()
+    await next();
 
-    const { request, response } = ctx
-    const acceptEncoding = request.header('accept-encoding', '')
-    const body = response.getBody()
+    const { request, response } = ctx;
+    const acceptEncoding = request.header("accept-encoding", "");
+    const body = response.getBody();
 
     // Only compress if body is substantial
-    if (!body || typeof body !== 'string' || body.length < 1024) {
-      return
+    if (!body || typeof body !== "string" || body.length < 1024) {
+      return;
     }
 
     try {
-      if (acceptEncoding.includes('gzip')) {
-        const compressed = await this.gzipAsync(body)
-        response.header('Content-Encoding', 'gzip')
-        response.header('Content-Length', compressed.length.toString())
-        response.send(compressed)
-      } else if (acceptEncoding.includes('deflate')) {
-        const compressed = await this.deflateAsync(body)
-        response.header('Content-Encoding', 'deflate')
-        response.header('Content-Length', compressed.length.toString())
-        response.send(compressed)
+      if (acceptEncoding.includes("gzip")) {
+        const compressed = await this.gzipAsync(body);
+        response.header("Content-Encoding", "gzip");
+        response.header("Content-Length", compressed.length.toString());
+        response.send(compressed);
+      } else if (acceptEncoding.includes("deflate")) {
+        const compressed = await this.deflateAsync(body);
+        response.header("Content-Encoding", "deflate");
+        response.header("Content-Length", compressed.length.toString());
+        response.send(compressed);
       }
     } catch (error) {
       // Fall back to uncompressed response
-      console.error('Compression failed:', error)
+      console.error("Compression failed:", error);
     }
   }
 }
@@ -366,7 +366,7 @@ export default class CompressionMiddleware {
 
 ```typescript
 // app/services/queue_service.ts
-import redis from '@adonisjs/redis/services/main'
+import redis from "@adonisjs/redis/services/main";
 
 export default class QueueService {
   // ✅ Add job to queue
@@ -374,24 +374,27 @@ export default class QueueService {
     const job = {
       id: Date.now().toString(),
       data: jobData,
-      createdAt: new Date().toISOString()
-    }
+      createdAt: new Date().toISOString(),
+    };
 
-    await redis.lpush(`queue:${queueName}`, JSON.stringify(job))
+    await redis.lpush(`queue:${queueName}`, JSON.stringify(job));
   }
 
   // ✅ Process jobs
-  async processJobs(queueName: string, processor: (data: any) => Promise<void>) {
+  async processJobs(
+    queueName: string,
+    processor: (data: any) => Promise<void>,
+  ) {
     while (true) {
       try {
-        const jobData = await redis.brpop(`queue:${queueName}`, 10)
-        if (!jobData) continue
+        const jobData = await redis.brpop(`queue:${queueName}`, 10);
+        if (!jobData) continue;
 
-        const job = JSON.parse(jobData[1])
-        await processor(job.data)
-        console.log(`Job ${job.id} completed`)
+        const job = JSON.parse(jobData[1]);
+        await processor(job.data);
+        console.log(`Job ${job.id} completed`);
       } catch (error) {
-        console.error('Job processing error:', error)
+        console.error("Job processing error:", error);
       }
     }
   }
@@ -402,42 +405,42 @@ export default class QueueService {
 
 ```typescript
 // app/middleware/performance_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
-import logger from '@adonisjs/core/services/logger'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
+import logger from "@adonisjs/core/services/logger";
 
 export default class PerformanceMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
-    const startTime = Date.now()
+    const startTime = Date.now();
 
     try {
-      const result = await next()
-      
-      const duration = Date.now() - startTime
+      const result = await next();
+
+      const duration = Date.now() - startTime;
 
       // Log slow requests
       if (duration > 1000) {
-        logger.warn('Slow request', {
+        logger.warn("Slow request", {
           method: ctx.request.method(),
           url: ctx.request.url(),
-          duration: `${duration}ms`
-        })
+          duration: `${duration}ms`,
+        });
       }
 
       // Add response time header
-      ctx.response.header('X-Response-Time', `${duration}ms`)
-      
-      return result
+      ctx.response.header("X-Response-Time", `${duration}ms`);
+
+      return result;
     } catch (error) {
-      const duration = Date.now() - startTime
-      logger.error('Request failed', {
+      const duration = Date.now() - startTime;
+      logger.error("Request failed", {
         method: ctx.request.method(),
         url: ctx.request.url(),
         duration: `${duration}ms`,
-        error: error.message
-      })
+        error: error.message,
+      });
 
-      throw error
+      throw error;
     }
   }
 }
@@ -451,14 +454,14 @@ export default class PerformanceMiddleware {
 // ✅ Use database transactions for related operations
 async createUserWithProfile(userData: any, profileData: any) {
   const trx = await Database.transaction()
-  
+
   try {
     const user = await User.create(userData, { client: trx })
     const profile = await Profile.create({
       ...profileData,
       userId: user.id
     }, { client: trx })
-    
+
     await trx.commit()
     return { user, profile }
   } catch (error) {
@@ -488,11 +491,11 @@ async getPaginatedPosts(page: number, limit: number) {
 // ❌ N+1 query problem
 async getBadPosts() {
   const posts = await Post.all()
-  
+
   for (const post of posts) {
     post.author = await User.find(post.userId) // N+1 queries!
   }
-  
+
   return posts
 }
 

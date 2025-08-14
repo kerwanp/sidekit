@@ -80,12 +80,12 @@ import app from './app'
 
 export default {
   fetch: app.fetch,
-  
+
   // Scheduled handler (Cron Triggers)
   scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(handleScheduledEvent(event, env))
   },
-  
+
   // Queue handler
   queue(batch: MessageBatch, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(processQueue(batch, env))
@@ -230,7 +230,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2'
 export class HonoLambdaStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
-    
+
     const fn = new lambda.Function(this, 'HonoFunction', {
       runtime: lambda.Runtime.NODEJS_20_X,
       code: lambda.Code.fromAsset('dist'),
@@ -241,7 +241,7 @@ export class HonoLambdaStack extends cdk.Stack {
         NODE_ENV: 'production'
       }
     })
-    
+
     const api = new apigateway.HttpApi(this, 'HonoApi', {
       defaultIntegration: new apigateway.HttpLambdaIntegration(
         'HonoIntegration',
@@ -304,10 +304,10 @@ import app from './app'
 const server = Bun.serve({
   port: process.env.PORT || 3000,
   fetch: app.fetch,
-  
+
   // Bun-specific optimizations
   maxRequestBodySize: 10 * 1024 * 1024, // 10MB
-  
+
   // WebSocket support
   websocket: {
     open(ws) {
@@ -373,7 +373,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-  
+
   db:
     image: postgres:15
     environment:
@@ -382,7 +382,7 @@ services:
       - POSTGRES_DB=mydb
     volumes:
       - postgres_data:/var/lib/postgresql/data
-  
+
   redis:
     image: redis:7-alpine
     volumes:
@@ -420,85 +420,85 @@ CMD ["node", "dist/node.js"]
 
 ```typescript
 // Health check endpoint
-app.get('/health', (c) => {
+app.get("/health", (c) => {
   return c.json({
-    status: 'healthy',
+    status: "healthy",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     memory: process.memoryUsage(),
-    version: process.env.APP_VERSION || 'unknown'
-  })
-})
+    version: process.env.APP_VERSION || "unknown",
+  });
+});
 
 // Readiness check
-app.get('/ready', async (c) => {
+app.get("/ready", async (c) => {
   try {
     // Check database connection
-    await checkDatabaseConnection()
+    await checkDatabaseConnection();
     // Check external services
-    await checkExternalServices()
-    
-    return c.json({ ready: true })
+    await checkExternalServices();
+
+    return c.json({ ready: true });
   } catch (error) {
-    return c.json({ ready: false, error: error.message }, 503)
+    return c.json({ ready: false, error: error.message }, 503);
   }
-})
+});
 
 // Metrics endpoint
-app.get('/metrics', (c) => {
-  const metrics = collectMetrics()
-  c.header('Content-Type', 'text/plain')
-  return c.text(metrics)
-})
+app.get("/metrics", (c) => {
+  const metrics = collectMetrics();
+  c.header("Content-Type", "text/plain");
+  return c.text(metrics);
+});
 ```
 
 ### Environment Configuration
 
 ```typescript
 // src/config/index.ts
-import { z } from 'zod'
+import { z } from "zod";
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']),
-  PORT: z.string().default('3000'),
+  NODE_ENV: z.enum(["development", "test", "production"]),
+  PORT: z.string().default("3000"),
   DATABASE_URL: z.string(),
   REDIS_URL: z.string().optional(),
   JWT_SECRET: z.string().min(32),
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-  CORS_ORIGIN: z.string().default('*'),
-  RATE_LIMIT_MAX: z.string().default('100'),
-  RATE_LIMIT_WINDOW_MS: z.string().default('900000')
-})
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  CORS_ORIGIN: z.string().default("*"),
+  RATE_LIMIT_MAX: z.string().default("100"),
+  RATE_LIMIT_WINDOW_MS: z.string().default("900000"),
+});
 
-export const config = envSchema.parse(process.env)
+export const config = envSchema.parse(process.env);
 
 // Runtime-specific configuration
 export const getRuntimeConfig = () => {
-  const runtime = detectRuntime()
-  
+  const runtime = detectRuntime();
+
   switch (runtime) {
-    case 'cloudflare':
+    case "cloudflare":
       return {
         maxBodySize: 10 * 1024 * 1024, // 10MB
-        maxDuration: 30
-      }
-    case 'vercel':
+        maxDuration: 30,
+      };
+    case "vercel":
       return {
         maxBodySize: 4.5 * 1024 * 1024, // 4.5MB
-        maxDuration: 10
-      }
-    case 'aws-lambda':
+        maxDuration: 10,
+      };
+    case "aws-lambda":
       return {
         maxBodySize: 6 * 1024 * 1024, // 6MB
-        maxDuration: 900
-      }
+        maxDuration: 900,
+      };
     default:
       return {
         maxBodySize: 50 * 1024 * 1024, // 50MB
-        maxDuration: Infinity
-      }
+        maxDuration: Infinity,
+      };
   }
-}
+};
 ```
 
 ### Sources

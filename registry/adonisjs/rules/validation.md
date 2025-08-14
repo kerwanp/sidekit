@@ -15,7 +15,7 @@ Validators MUST be placed in `app/validators/` and follow these patterns:
 
 ```typescript
 // app/validators/user_validator.ts
-import vine from '@vinejs/vine'
+import vine from "@vinejs/vine";
 
 // ✅ Correct: Create user validation schema
 export const createUserValidator = vine.compile(
@@ -23,36 +23,36 @@ export const createUserValidator = vine.compile(
     email: vine.string().email().normalizeEmail(),
     password: vine.string().minLength(8).maxLength(32).confirmed(),
     fullName: vine.string().minLength(2).maxLength(100),
-    dateOfBirth: vine.date().beforeOrEqual('today'),
-    role: vine.enum(['user', 'admin', 'moderator']).optional()
-  })
-)
+    dateOfBirth: vine.date().beforeOrEqual("today"),
+    role: vine.enum(["user", "admin", "moderator"]).optional(),
+  }),
+);
 
 // ✅ Correct: Update user validation schema
 export const updateUserValidator = vine.compile(
   vine.object({
     email: vine.string().email().normalizeEmail().optional(),
     fullName: vine.string().minLength(2).maxLength(100).optional(),
-    dateOfBirth: vine.date().beforeOrEqual('today').optional(),
-    role: vine.enum(['user', 'admin', 'moderator']).optional()
-  })
-)
+    dateOfBirth: vine.date().beforeOrEqual("today").optional(),
+    role: vine.enum(["user", "admin", "moderator"]).optional(),
+  }),
+);
 
 // ✅ Correct: Login validation schema
 export const loginValidator = vine.compile(
   vine.object({
     email: vine.string().email().normalizeEmail(),
     password: vine.string().minLength(1),
-    rememberMe: vine.boolean().optional()
-  })
-)
+    rememberMe: vine.boolean().optional(),
+  }),
+);
 ```
 
 #### Post Validator Patterns
 
 ```typescript
 // app/validators/post_validator.ts
-import vine from '@vinejs/vine'
+import vine from "@vinejs/vine";
 
 // ✅ Correct: Basic post validation
 export const createPostValidator = vine.compile(
@@ -63,59 +63,67 @@ export const createPostValidator = vine.compile(
     categoryId: vine.number().positive(),
     tags: vine.array(vine.string()).minLength(1).maxLength(5),
     publishedAt: vine.date().optional(),
-    featuredImage: vine.file({
-      size: '2mb',
-      extnames: ['jpg', 'jpeg', 'png']
-    }).optional()
-  })
-)
+    featuredImage: vine
+      .file({
+        size: "2mb",
+        extnames: ["jpg", "jpeg", "png"],
+      })
+      .optional(),
+  }),
+);
 
 // ✅ Correct: Update post validation
 export const updatePostValidator = vine.compile(
   vine.object({
     title: vine.string().minLength(5).maxLength(200).optional(),
     content: vine.string().minLength(10).optional(),
-    slug: vine.string().regex(/^[a-z0-9-]+$/).optional(),
+    slug: vine
+      .string()
+      .regex(/^[a-z0-9-]+$/)
+      .optional(),
     categoryId: vine.number().positive().optional(),
     tags: vine.array(vine.string()).optional(),
-    status: vine.enum(['draft', 'published']).optional()
-  })
-)
+    status: vine.enum(["draft", "published"]).optional(),
+  }),
+);
 ```
 
 ### Using Validators in Controllers
 
 ```typescript
 // app/controllers/users_controller.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import { createUserValidator, updateUserValidator } from '#validators/user_validator'
-import User from '#models/user'
+import type { HttpContext } from "@adonisjs/core/http";
+import {
+  createUserValidator,
+  updateUserValidator,
+} from "#validators/user_validator";
+import User from "#models/user";
 
 export default class UsersController {
   // ✅ Correct: Validate request data
   async store({ request, response }: HttpContext) {
     try {
-      const data = await request.validateUsing(createUserValidator)
-      const user = await User.create(data)
-      return response.status(201).json({ data: user })
+      const data = await request.validateUsing(createUserValidator);
+      const user = await User.create(data);
+      return response.status(201).json({ data: user });
     } catch (error) {
-      if (error.code === 'E_VALIDATION_ERROR') {
+      if (error.code === "E_VALIDATION_ERROR") {
         return response.badRequest({
-          error: 'Validation failed',
-          messages: error.messages
-        })
+          error: "Validation failed",
+          messages: error.messages,
+        });
       }
-      throw error
+      throw error;
     }
   }
 
   // ✅ Correct: Validate with existing data check
   async update({ params, request, response }: HttpContext) {
-    const user = await User.findOrFail(params.id)
-    const data = await request.validateUsing(updateUserValidator)
-    
-    await user.merge(data).save()
-    return response.json({ data: user })
+    const user = await User.findOrFail(params.id);
+    const data = await request.validateUsing(updateUserValidator);
+
+    await user.merge(data).save();
+    return response.json({ data: user });
   }
 
   // ✅ Correct: Manual validation
@@ -123,17 +131,17 @@ export default class UsersController {
     try {
       const data = await vine.validate({
         schema: createUserValidator,
-        data: request.all()
-      })
-      
+        data: request.all(),
+      });
+
       // Process validated data
-      const user = await User.create(data)
-      return response.json({ data: user })
+      const user = await User.create(data);
+      return response.json({ data: user });
     } catch (error) {
       return response.badRequest({
-        error: 'Validation failed',
-        messages: error.messages
-      })
+        error: "Validation failed",
+        messages: error.messages,
+      });
     }
   }
 }
@@ -143,7 +151,7 @@ export default class UsersController {
 
 ```typescript
 // app/validators/example_validator.ts
-import vine from '@vinejs/vine'
+import vine from "@vinejs/vine";
 
 export const exampleValidator = vine.compile(
   vine.object({
@@ -151,103 +159,103 @@ export const exampleValidator = vine.compile(
     email: vine.string().email().normalizeEmail(),
     username: vine.string().minLength(3).maxLength(20),
     url: vine.string().url(),
-    
+
     // ✅ Number validations
     age: vine.number().range([18, 100]),
     price: vine.number().positive(),
     quantity: vine.number().positive(),
-    
+
     // ✅ Date validations
-    birthDate: vine.date().beforeOrEqual('today'),
+    birthDate: vine.date().beforeOrEqual("today"),
     startDate: vine.date(),
-    endDate: vine.date().afterField('startDate'),
-    
+    endDate: vine.date().afterField("startDate"),
+
     // ✅ Boolean validations
     isActive: vine.boolean(),
     agreeToTerms: vine.boolean().isTrue(),
-    
+
     // ✅ Array validations
     tags: vine.array(vine.string()).minLength(1).maxLength(5),
     categoryIds: vine.array(vine.number().positive()),
-    
+
     // ✅ File validations
     avatar: vine.file({
-      size: '2mb',
-      extnames: ['jpg', 'jpeg', 'png']
+      size: "2mb",
+      extnames: ["jpg", "jpeg", "png"],
     }),
-    
+
     // ✅ Nested object validations
     address: vine.object({
       street: vine.string().minLength(5),
       city: vine.string().minLength(2),
-      postalCode: vine.string()
+      postalCode: vine.string(),
     }),
-    
+
     // ✅ Enums
-    status: vine.enum(['active', 'inactive']).optional(),
-    theme: vine.enum(['light', 'dark']).optional()
-  })
-)
+    status: vine.enum(["active", "inactive"]).optional(),
+    theme: vine.enum(["light", "dark"]).optional(),
+  }),
+);
 ```
 
 ### Custom Validation Rules
 
 ```typescript
 // app/validators/custom_rules.ts
-import vine from '@vinejs/vine'
-import User from '#models/user'
+import vine from "@vinejs/vine";
+import User from "#models/user";
 
 // ✅ Correct: Custom unique validation
 const uniqueEmail = vine.createRule(async (value, options, field) => {
-  if (typeof value !== 'string') {
-    return
+  if (typeof value !== "string") {
+    return;
   }
 
-  const user = await User.findBy('email', value)
+  const user = await User.findBy("email", value);
   if (user) {
-    field.report('The {{ field }} field is not unique', 'unique', field)
+    field.report("The {{ field }} field is not unique", "unique", field);
   }
-})
+});
 
 // ✅ Usage of custom rules
 export const userRegistrationValidator = vine.compile(
   vine.object({
     email: vine.string().email().use(uniqueEmail()),
     password: vine.string().minLength(8),
-    passwordConfirmation: vine.string()
-  })
-)
+    passwordConfirmation: vine.string(),
+  }),
+);
 ```
 
 ### Validation Error Handling
 
 ```typescript
 // app/exceptions/validation_exception_handler.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import { Exception } from '@adonisjs/core/exceptions'
+import type { HttpContext } from "@adonisjs/core/http";
+import { Exception } from "@adonisjs/core/exceptions";
 
 export default class ValidationExceptionHandler {
   // ✅ Correct: Handle validation errors globally
   async handle(error: any, ctx: HttpContext) {
-    if (error.code === 'E_VALIDATION_ERROR') {
+    if (error.code === "E_VALIDATION_ERROR") {
       return ctx.response.status(422).json({
-        error: 'Validation failed',
+        error: "Validation failed",
         messages: error.messages,
-        fields: this.formatErrors(error.messages)
-      })
+        fields: this.formatErrors(error.messages),
+      });
     }
 
     // Handle other exceptions
     return ctx.response.status(500).json({
-      error: 'Internal server error'
-    })
+      error: "Internal server error",
+    });
   }
 
   private formatErrors(messages: any[]) {
     return messages.reduce((acc, message) => {
-      acc[message.field] = message.message
-      return acc
-    }, {})
+      acc[message.field] = message.message;
+      return acc;
+    }, {});
   }
 }
 ```
@@ -256,86 +264,83 @@ export default class ValidationExceptionHandler {
 
 ```typescript
 // app/middleware/validate_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
-import vine from '@vinejs/vine'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
+import vine from "@vinejs/vine";
 
 export default class ValidateMiddleware {
-  async handle(
-    ctx: HttpContext,
-    next: NextFn,
-    options: { validator: any }
-  ) {
+  async handle(ctx: HttpContext, next: NextFn, options: { validator: any }) {
     try {
-      const validatedData = await ctx.request.validateUsing(options.validator)
-      ctx.validatedData = validatedData
+      const validatedData = await ctx.request.validateUsing(options.validator);
+      ctx.validatedData = validatedData;
     } catch (error) {
       return ctx.response.badRequest({
-        error: 'Validation failed',
-        messages: error.messages
-      })
+        error: "Validation failed",
+        messages: error.messages,
+      });
     }
 
-    return await next()
+    return await next();
   }
 }
 
 // Usage in routes
-router.post('users', '#controllers/users_controller.store')
-  .middleware([
-    middleware.validate({ validator: createUserValidator })
-  ])
+router
+  .post("users", "#controllers/users_controller.store")
+  .middleware([middleware.validate({ validator: createUserValidator })]);
 ```
 
 ### Testing Validators
 
 ```typescript
 // tests/unit/validators/user_validator.spec.ts
-import { test } from '@japa/runner'
-import vine from '@vinejs/vine'
-import { createUserValidator } from '#validators/user_validator'
+import { test } from "@japa/runner";
+import vine from "@vinejs/vine";
+import { createUserValidator } from "#validators/user_validator";
 
-test.group('User Validator', () => {
-  test('should validate correct user data', async ({ assert }) => {
+test.group("User Validator", () => {
+  test("should validate correct user data", async ({ assert }) => {
     const data = {
-      email: 'test@example.com',
-      password: 'SecurePass123!',
-      passwordConfirmation: 'SecurePass123!',
-      fullName: 'John Doe',
-      dateOfBirth: '1990-01-01'
-    }
+      email: "test@example.com",
+      password: "SecurePass123!",
+      passwordConfirmation: "SecurePass123!",
+      fullName: "John Doe",
+      dateOfBirth: "1990-01-01",
+    };
 
     const result = await vine.validate({
       schema: createUserValidator,
-      data
-    })
+      data,
+    });
 
-    assert.properties(result, ['email', 'password', 'fullName', 'dateOfBirth'])
-    assert.equal(result.email, 'test@example.com')
-  })
+    assert.properties(result, ["email", "password", "fullName", "dateOfBirth"]);
+    assert.equal(result.email, "test@example.com");
+  });
 
-  test('should fail with invalid email', async ({ assert }) => {
+  test("should fail with invalid email", async ({ assert }) => {
     const data = {
-      email: 'invalid-email',
-      password: 'SecurePass123!',
-      passwordConfirmation: 'SecurePass123!',
-      fullName: 'John Doe'
-    }
+      email: "invalid-email",
+      password: "SecurePass123!",
+      passwordConfirmation: "SecurePass123!",
+      fullName: "John Doe",
+    };
 
     try {
       await vine.validate({
         schema: createUserValidator,
-        data
-      })
-      assert.fail('Should have thrown validation error')
+        data,
+      });
+      assert.fail("Should have thrown validation error");
     } catch (error) {
-      assert.equal(error.code, 'E_VALIDATION_ERROR')
-      assert.isTrue(error.messages.some((msg: any) => 
-        msg.field === 'email' && msg.rule === 'email'
-      ))
+      assert.equal(error.code, "E_VALIDATION_ERROR");
+      assert.isTrue(
+        error.messages.some(
+          (msg: any) => msg.field === "email" && msg.rule === "email",
+        ),
+      );
     }
-  })
-})
+  });
+});
 ```
 
 ### Validation Best Practices
@@ -401,25 +406,25 @@ export const paginationValidator = vine.compile(
     page: vine.number().positive().optional(),
     limit: vine.number().range([1, 100]).optional(),
     sortBy: vine.string().optional(),
-    sortOrder: vine.enum(['asc', 'desc']).optional()
-  })
-)
+    sortOrder: vine.enum(["asc", "desc"]).optional(),
+  }),
+);
 
 // ✅ Search validation
 export const searchValidator = vine.compile(
   vine.object({
     query: vine.string().minLength(2).maxLength(100),
-    category: vine.string().optional()
-  })
-)
+    category: vine.string().optional(),
+  }),
+);
 
 // ✅ Bulk operations validation
 export const bulkUpdateValidator = vine.compile(
   vine.object({
     ids: vine.array(vine.number().positive()).minLength(1).maxLength(100),
-    action: vine.enum(['activate', 'deactivate', 'delete'])
-  })
-)
+    action: vine.enum(["activate", "deactivate", "delete"]),
+  }),
+);
 ```
 
 ### Sources

@@ -20,23 +20,25 @@ export const createPostValidator = vine.compile(
     slug: vine.string().regex(/^[a-z0-9-]+$/), // Only alphanumeric and hyphens
     tags: vine.array(vine.string().minLength(1).maxLength(50)).maxLength(10),
     categoryId: vine.number().positive(),
-    metadata: vine.object({
-      seoTitle: vine.string().maxLength(60).trim().optional(),
-      seoDescription: vine.string().maxLength(160).trim().optional()
-    }).optional()
-  })
-)
+    metadata: vine
+      .object({
+        seoTitle: vine.string().maxLength(60).trim().optional(),
+        seoDescription: vine.string().maxLength(160).trim().optional(),
+      })
+      .optional(),
+  }),
+);
 
 // ✅ Correct: File upload validation
 export const uploadValidator = vine.compile(
   vine.object({
     file: vine.file({
-      size: '5mb',
-      extnames: ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
+      size: "5mb",
+      extnames: ["jpg", "jpeg", "png", "gif", "pdf", "doc", "docx"],
     }),
-    description: vine.string().maxLength(500).optional()
-  })
-)
+    description: vine.string().maxLength(500).optional(),
+  }),
+);
 ```
 
 ### Authentication Security
@@ -45,23 +47,23 @@ export const uploadValidator = vine.compile(
 
 ```typescript
 // app/models/user.ts
-import hash from '@adonisjs/core/services/hash'
+import hash from "@adonisjs/core/services/hash";
 
 export default class User extends BaseModel {
   @column({ serializeAs: null })
-  declare password: string
+  declare password: string;
 
   // ✅ Correct: Hash passwords
   @beforeSave()
   static async hashPassword(user: User) {
     if (user.$dirty.password) {
-      user.password = await hash.make(user.password)
+      user.password = await hash.make(user.password);
     }
   }
 
   // ✅ Correct: Password verification
   async verifyPassword(plainPassword: string) {
-    return await hash.verify(this.password, plainPassword)
+    return await hash.verify(this.password, plainPassword);
   }
 }
 ```
@@ -70,51 +72,51 @@ export default class User extends BaseModel {
 
 ```typescript
 // config/session.ts
-import env from '#start/env'
+import env from "#start/env";
 
 export default {
-  driver: env.get('SESSION_DRIVER'),
-  cookieName: 'adonis-session',
-  
+  driver: env.get("SESSION_DRIVER"),
+  cookieName: "adonis-session",
+
   // ✅ Secure session configuration
   cookie: {
-    path: '/',
-    maxAge: '2h',
+    path: "/",
+    maxAge: "2h",
     httpOnly: true, // Prevent XSS
-    secure: env.get('NODE_ENV') === 'production', // HTTPS in production
-    sameSite: 'strict' // CSRF protection
+    secure: env.get("NODE_ENV") === "production", // HTTPS in production
+    sameSite: "strict", // CSRF protection
   },
-  
-  age: '2 hours'
-}
+
+  age: "2 hours",
+};
 ```
 
 #### JWT Token Security
 
 ```typescript
 // app/services/auth_service.ts
-import jwt from 'jsonwebtoken'
-import env from '#start/env'
+import jwt from "jsonwebtoken";
+import env from "#start/env";
 
 export default class AuthService {
   // ✅ Correct: JWT token generation
   generateToken(user: User) {
     return jwt.sign(
-      { 
+      {
         sub: user.id,
         email: user.email,
-        role: user.role
+        role: user.role,
       },
-      env.get('JWT_SECRET'),
+      env.get("JWT_SECRET"),
       {
-        expiresIn: '1h'
-      }
-    )
+        expiresIn: "1h",
+      },
+    );
   }
 
   // ✅ Correct: Token verification
   verifyToken(token: string) {
-    return jwt.verify(token, env.get('JWT_SECRET'))
+    return jwt.verify(token, env.get("JWT_SECRET"));
   }
 }
 ```
@@ -123,20 +125,19 @@ export default class AuthService {
 
 ```typescript
 // config/cors.ts
-import env from '#start/env'
+import env from "#start/env";
 
 export default {
   enabled: true,
-  
+
   // ✅ Correct: Configure allowed origins
-  origin: env.get('NODE_ENV') === 'production' 
-    ? ['https://yourdomain.com']
-    : true, // Allow all origins in development
-    
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  headers: ['Content-Type', 'Authorization'],
-  credentials: true
-}
+  origin:
+    env.get("NODE_ENV") === "production" ? ["https://yourdomain.com"] : true, // Allow all origins in development
+
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  headers: ["Content-Type", "Authorization"],
+  credentials: true,
+};
 ```
 
 ### SQL Injection Prevention
@@ -144,40 +145,40 @@ export default {
 ```typescript
 // ✅ Correct: Use query builder (automatically escapes)
 const users = await User.query()
-  .where('email', email)
-  .where('role', role)
-  .limit(10)
+  .where("email", email)
+  .where("role", role)
+  .limit(10);
 
 // ✅ Correct: Parameterized raw queries
 const result = await Database.rawQuery(
-  'SELECT * FROM users WHERE email = ? AND created_at > ?',
-  [email, startDate]
-)
+  "SELECT * FROM users WHERE email = ? AND created_at > ?",
+  [email, startDate],
+);
 
 // ❌ Incorrect: String concatenation (vulnerable to SQL injection)
 const result = await Database.rawQuery(
-  `SELECT * FROM users WHERE email = '${email}'`
-)
+  `SELECT * FROM users WHERE email = '${email}'`,
+);
 ```
 
 ### XSS Prevention
 
 ```typescript
 // app/middleware/security_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
 
 export default class SecurityMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
     // ✅ Correct: Set security headers
-    ctx.response.header('X-Content-Type-Options', 'nosniff')
-    ctx.response.header('X-Frame-Options', 'DENY')
-    ctx.response.header('X-XSS-Protection', '1; mode=block')
-    
-    // ✅ Basic Content Security Policy
-    ctx.response.header('Content-Security-Policy', "default-src 'self'")
+    ctx.response.header("X-Content-Type-Options", "nosniff");
+    ctx.response.header("X-Frame-Options", "DENY");
+    ctx.response.header("X-XSS-Protection", "1; mode=block");
 
-    return await next()
+    // ✅ Basic Content Security Policy
+    ctx.response.header("Content-Security-Policy", "default-src 'self'");
+
+    return await next();
   }
 }
 ```
@@ -186,38 +187,39 @@ export default class SecurityMiddleware {
 
 ```typescript
 // app/middleware/csrf_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
 
 export default class CsrfMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
-    const { request, response, session } = ctx
-    
+    const { request, response, session } = ctx;
+
     // ✅ Generate CSRF token for safe methods
-    if (['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
-      const token = await this.generateToken()
-      session.put('_csrf_token', token)
-      response.header('X-CSRF-Token', token)
-      return await next()
+    if (["GET", "HEAD", "OPTIONS"].includes(request.method())) {
+      const token = await this.generateToken();
+      session.put("_csrf_token", token);
+      response.header("X-CSRF-Token", token);
+      return await next();
     }
 
     // ✅ Verify CSRF token for unsafe methods
-    const sessionToken = session.get('_csrf_token')
-    const requestToken = request.header('x-csrf-token') || request.input('_csrf_token')
+    const sessionToken = session.get("_csrf_token");
+    const requestToken =
+      request.header("x-csrf-token") || request.input("_csrf_token");
 
     if (!sessionToken || !requestToken || sessionToken !== requestToken) {
       return response.forbidden({
-        error: 'CSRF token mismatch',
-        code: 'CSRF_TOKEN_MISMATCH'
-      })
+        error: "CSRF token mismatch",
+        code: "CSRF_TOKEN_MISMATCH",
+      });
     }
 
-    return await next()
+    return await next();
   }
 
   private async generateToken(): Promise<string> {
-    const crypto = await import('node:crypto')
-    return crypto.randomBytes(32).toString('hex')
+    const crypto = await import("node:crypto");
+    return crypto.randomBytes(32).toString("hex");
   }
 }
 ```
@@ -226,37 +228,40 @@ export default class CsrfMiddleware {
 
 ```typescript
 // app/middleware/rate_limit_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
-import redis from '@adonisjs/redis/services/main'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
+import redis from "@adonisjs/redis/services/main";
 
 export default class RateLimitMiddleware {
   async handle(
     ctx: HttpContext,
     next: NextFn,
-    options: { max: number; window: number }
+    options: { max: number; window: number },
   ) {
-    const { request, response } = ctx
-    const key = `rate_limit:${request.ip()}`
-    
-    const current = await redis.get(key)
-    const requests = current ? parseInt(current) : 0
+    const { request, response } = ctx;
+    const key = `rate_limit:${request.ip()}`;
+
+    const current = await redis.get(key);
+    const requests = current ? parseInt(current) : 0;
 
     if (requests >= options.max) {
       return response.tooManyRequests({
-        error: 'Too many requests'
-      })
+        error: "Too many requests",
+      });
     }
 
     // Increment counter
-    await redis.incr(key)
-    await redis.expire(key, options.window)
+    await redis.incr(key);
+    await redis.expire(key, options.window);
 
     // Add rate limit headers
-    response.header('X-RateLimit-Limit', options.max.toString())
-    response.header('X-RateLimit-Remaining', (options.max - requests - 1).toString())
+    response.header("X-RateLimit-Limit", options.max.toString());
+    response.header(
+      "X-RateLimit-Remaining",
+      (options.max - requests - 1).toString(),
+    );
 
-    return await next()
+    return await next();
   }
 }
 ```
@@ -265,37 +270,33 @@ export default class RateLimitMiddleware {
 
 ```typescript
 // app/services/file_upload_service.ts
-import { MultipartFile } from '@adonisjs/core/bodyparser'
+import { MultipartFile } from "@adonisjs/core/bodyparser";
 
 export default class FileUploadService {
-  private allowedMimeTypes = [
-    'image/jpeg',
-    'image/png',
-    'application/pdf'
-  ]
+  private allowedMimeTypes = ["image/jpeg", "image/png", "application/pdf"];
 
   async uploadFile(file: MultipartFile): Promise<string> {
     // ✅ Validate file type
-    if (!this.allowedMimeTypes.includes(file.type || '')) {
-      throw new Error('File type not allowed')
+    if (!this.allowedMimeTypes.includes(file.type || "")) {
+      throw new Error("File type not allowed");
     }
 
     // ✅ Validate file size (2MB max)
     if (file.size > 2 * 1024 * 1024) {
-      throw new Error('File too large')
+      throw new Error("File too large");
     }
 
     // ✅ Generate secure filename
-    const filename = this.generateSecureFilename(file.extname || '')
-    await file.move('uploads', { name: filename })
+    const filename = this.generateSecureFilename(file.extname || "");
+    await file.move("uploads", { name: filename });
 
-    return filename
+    return filename;
   }
 
   private generateSecureFilename(extension: string): string {
-    const timestamp = Date.now()
-    const random = Math.random().toString(36).substring(2)
-    return `${timestamp}_${random}${extension}`
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2);
+    return `${timestamp}_${random}${extension}`;
   }
 }
 ```
@@ -304,46 +305,46 @@ export default class FileUploadService {
 
 ```typescript
 // start/env.ts
-import { Env } from '@adonisjs/core/env'
+import { Env } from "@adonisjs/core/env";
 
-export default await Env.create(new URL('../', import.meta.url), {
+export default await Env.create(new URL("../", import.meta.url), {
   // ✅ Environment validation
-  NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
+  NODE_ENV: Env.schema.enum(["development", "production", "test"] as const),
   APP_KEY: Env.schema.string(),
   DB_PASSWORD: Env.schema.string(),
-  JWT_SECRET: Env.schema.string()
-})
+  JWT_SECRET: Env.schema.string(),
+});
 ```
 
 ### Secure Logging
 
 ```typescript
 // app/services/audit_service.ts
-import logger from '@adonisjs/core/services/logger'
+import logger from "@adonisjs/core/services/logger";
 
 export default class AuditService {
   // ✅ Log authentication attempts
   logAuthenticationAttempt(email: string, success: boolean) {
-    logger.info('Authentication attempt', {
+    logger.info("Authentication attempt", {
       email: this.maskEmail(email),
       success,
-      timestamp: new Date().toISOString()
-    })
+      timestamp: new Date().toISOString(),
+    });
   }
 
   // ✅ Log data access
   logDataAccess(userId: number, resource: string, action: string) {
-    logger.info('Data access', {
+    logger.info("Data access", {
       userId,
       resource,
       action,
-      timestamp: new Date().toISOString()
-    })
+      timestamp: new Date().toISOString(),
+    });
   }
 
   private maskEmail(email: string): string {
-    const [username, domain] = email.split('@')
-    return `${username.substring(0, 2)}***@${domain}`
+    const [username, domain] = email.split("@");
+    return `${username.substring(0, 2)}***@${domain}`;
   }
 }
 ```
@@ -352,24 +353,24 @@ export default class AuditService {
 
 ```typescript
 // app/middleware/security_headers_middleware.ts
-import type { HttpContext } from '@adonisjs/core/http'
-import type { NextFn } from '@adonisjs/core/types/http'
+import type { HttpContext } from "@adonisjs/core/http";
+import type { NextFn } from "@adonisjs/core/types/http";
 
 export default class SecurityHeadersMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
-    const { response } = ctx
+    const { response } = ctx;
 
     // ✅ Basic security headers
-    response.header('X-Content-Type-Options', 'nosniff')
-    response.header('X-Frame-Options', 'DENY')
-    response.header('X-XSS-Protection', '1; mode=block')
-    
+    response.header("X-Content-Type-Options", "nosniff");
+    response.header("X-Frame-Options", "DENY");
+    response.header("X-XSS-Protection", "1; mode=block");
+
     // ✅ HTTPS enforcement in production
     if (ctx.request.secure()) {
-      response.header('Strict-Transport-Security', 'max-age=31536000')
+      response.header("Strict-Transport-Security", "max-age=31536000");
     }
 
-    return await next()
+    return await next();
   }
 }
 ```
@@ -410,8 +411,8 @@ async store({ request }: HttpContext) {
 logger.info('User login', { email, password, token })
 
 // ✅ Correct: Log only non-sensitive data
-logger.info('User login', { 
-  email: maskEmail(email), 
+logger.info('User login', {
+  email: maskEmail(email),
   success: true,
   timestamp: new Date()
 })
