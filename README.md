@@ -1,135 +1,129 @@
-# Turborepo starter
+<div align="center">
+<br/>
 
-This Turborepo starter is maintained by the Turborepo core team.
+## Sidekit
 
-## Using this example
+### Boost your coding agent with pre-defined rules
 
-Run the following command:
+<br/>
+</div>
 
-```sh
-npx create-turbo@latest
+<div align="center">
+
+[🔨 Setup](#🔨-setup) • [🚀 Configure rules](#🚀-configure-rules)
+
+[Contribute](#contributing) • [License](#license)
+
+</div>
+
+# 🔨 Setup
+
+First install **Sidekit** globally using [npm](https://www.npmjs.com/).
+
+```shell
+npm install -g sidekit
 ```
 
-## What's inside?
+Navigate to your repository and initialize **Sidekit**.
 
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+```shell
+sidekit init
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+# 🚀 Configure rules
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
+Rules are a list of guidelines that will:
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+- Help your agent to have a better understanding of your stack
+- Guide your agent behavior
+- Enforce the agent to perform certain tasks
+- Ensure your agent does not perform certain modifications
 
-### Develop
+## Using the command line
 
-To develop all apps and packages, run the following command:
+You can configure rules by using the `add` command followed by the name of the kit.
+You will then be prompted with a list of preset and rules you can enable.
 
-```
-cd my-turborepo
+```shell
+sidekit add <kit>
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
+sidekit add adonisjs
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+The list of available kits can be found in the [registry folder](https://github.com/kerwanp/sidekit/tree/main/registry)
 
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
+## Using the configuration file
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
+**Sidekit** configuration is available inside `.sidekit/config.json`.
 
-### Remote Caching
+Rules and presets must be configured using `<kit_name>:<rule_name>` (eg. `worfklow:commit-conventional`)
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
+```json
+{
+  "rules": ["workflow:commit-conventional"],
+  "presets": ["adonisjs:recommended"]
+}
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+You can then generate the agent documentation using the following command:
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
+```shell
+sidekit generate
 ```
 
-## Useful Links
+## Custom rules
 
-Learn more about the power of Turborepo:
+You can provide custom guidelines to your coding agent by creating markdown files inside the `.sidekit/rules` folder.
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+Here is an example of a rule that will enforce the agent to self-review modifications to create a feedback loop on itself.
+
+```md
+---
+parent: worfklow
+name: Self-review
+description: Ensure the AI perform a self-review
+---
+
+## Task reporting
+
+**IMPORTANT**: When you have finished a task or done modifications you must review yourself.
+
+Steps:
+
+1. Run git diff to see recent changes
+2. Focus on modified files
+3. Generate review
+4. Perform modifications based on the review
+
+Review checklit:
+
+- Code is simple and readable
+- Functions and variables are well-named
+- No duplicated code
+- Proper error handling
+- No exposed secrets or API keys
+- Input validation implemented
+- Good test coverage
+- Performance considerations addressed
+
+Provide feedback organized by priority:
+
+- Critical issues (must fix)
+- Warnings (should fix)
+- Suggestions (consider improving)
+
+Include specific examples of how to fix issues.
+```
+
+Available properties:
+
+- `parent`: Used to group rules inside the generated files
+- `name`: Used to identify this rule (not used by agent)
+- `description`: Further information about the goal of the rule (not used by agent)
+- `type`: Must always be `rule`
+
+You can then generate the agent documentation using the following command:
+
+```shell
+sidekit generate
+```

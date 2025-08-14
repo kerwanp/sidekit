@@ -102,6 +102,7 @@ export async function createKitRule({ cwd, name }: CreateKitRuleOptions) {
     path,
     [
       "---",
+      `parent: example`,
       `name: ${name}`,
       `description: Example rule`,
       `type: global`,

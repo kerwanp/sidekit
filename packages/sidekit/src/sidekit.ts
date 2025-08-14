@@ -1,4 +1,5 @@
 import { claudeGenerator } from "./generators/claude.js";
+import { opencodeGenerator } from "./generators/opencode.js";
 import { fetchKit } from "./registry.js";
 import {
   SidekitConfig,
@@ -9,6 +10,10 @@ import {
 export async function generate(options: SidekitGeneratorOptions) {
   if (options.config.agent === "claude") {
     await claudeGenerator(options);
+  }
+
+  if (options.config.agent === "opencode") {
+    await opencodeGenerator(options);
   }
 }
 
