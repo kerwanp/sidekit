@@ -1,0 +1,24 @@
+{
+  "$schema": "../../schemas/kit.json",
+  "name": "Common",
+  "description": "Common set of rules",
+  "rules": [
+    {
+      "parent": "workflow",
+      "id": "commit-conventional",
+      "name": "Conventional Commits",
+      "description": "Enforce agent to commit changes using conventional commits",
+      "type": "rule",
+      "content": "## Commit worfklow\n\n### MANDATORY COMMIT BEHAVIOR\n\n1. After ANY file modification (creation, editing, deletion), you MUST immediately commit the changes\n2. NEVER skip commits or batch multiple unrelated changes\n3. Each logical change gets its own commit\n\n### Commit format\n\nAll commit messages MUST be following the conventional commits standard.\n"
+    },
+    {
+      "parent": "workflow",
+      "id": "commit-gitmoji",
+      "name": "Gitmoji Commits",
+      "description": "Enforce agent to commit changes using gitmoji convention",
+      "type": "rule",
+      "content": "## Commit worfklow\n\n### MANDATORY COMMIT BEHAVIOR\n\n1. After ANY file modification (creation, editing, deletion), you MUST immediately commit the changes\n2. NEVER skip commits or batch multiple unrelated changes\n3. Each logical change gets its own commit\n\n### Commit format\n\nAll commit messages MUST be following the gitmoji.dev standard.\n"
+    }
+  ],
+  "presets": {}
+}

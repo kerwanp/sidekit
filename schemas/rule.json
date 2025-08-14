@@ -9,6 +9,6 @@
     "type": { "type": "string", "enum": ["rule"] },
     "content": { "type": "string" }
   },
-  "required": ["id", "name", "description", "type", "content"],
+  "required": ["id", "name", "type", "content"],
   "additionalProperties": false
 }

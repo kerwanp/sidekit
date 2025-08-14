@@ -7,7 +7,8 @@
     "quick:test": "node --import=./tsnode.esm.js --enable-source-maps bin/test.ts",
     "test": "c8 yarn quick:test",
     "typecheck": "tsc --noEmit",
-    "schemas": "node --import=./tsnode.esm.js --enable-source-maps bin/schemas.ts",
+    "gen:schemas": "node --import=./tsnode.esm.js --enable-source-maps bin/schemas.ts",
+    "gen:registry": "node --import=./tsnode.esm.js --enable-source-maps bin/registry.ts",
     "dev": "tsc --watch"
   },
   "bin": "./build/bin/sidekit.js",
@@ -26,6 +27,7 @@
     "@types/node": "^24.2.1",
     "c8": "^10.1.3",
     "eslint": "^9.33.0",
+    "example": "workspace:*",
     "execa": "^9.6.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
@@ -34,7 +36,9 @@
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "citty": "^0.1.6",
+    "effect": "^3.17.7",
     "front-matter": "^4.0.2",
+    "mlly": "^1.7.4",
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
     "prettier": "^3.6.2",

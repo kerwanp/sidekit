@@ -1,9 +1,24 @@
 {
-  "$schema": "https://raw.githubusercontent.com/kerwanp/sidekit/refs/heads/main/schemas/kit.json",
+  "$schema": "../../schemas/kit.json",
   "name": "Sidekit",
   "description": "AI Guidelines for using Sidekit",
-  "presets": {
-    "recommended": ["sidekit:documentation", "sidekit:automation"]
-  },
-  "rules": []
+  "rules": [
+    {
+      "parent": "workflow",
+      "id": "automation",
+      "name": "Automation",
+      "description": "Enforce the AI to check for available rules when installing new dependencies.",
+      "type": "rule",
+      "content": "## Sidekit setup\n\nWhen installing new libraries/dependencies you MUST look for available Sidekit rules and install the recommended preset.\n\nSteps:\n\n1. List available kits `sidekit ls`\n2. Add the recommended preset inside `.sidekit/config.json` (eg. `adonisjs:recommended`)\n3. Generate agent files using `sidekit generate`\n"
+    },
+    {
+      "parent": "sidekit",
+      "id": "documentation",
+      "name": "Documentation",
+      "description": "Sidekit documentation",
+      "type": "rule",
+      "content": "## Documentation\n\nSidekit is a utility tool for deterministically managing coding agent rules and guidelines. It also provide a registry of predifined rules.\n\n### Usage\n\n- `sidekit ls` - List available guideline kits\n- `sidekit ls <kit>` - List available rules and presets for a specific kit\n- `sidekit add <kit> <rule_name>` - Add a rule to the configuration and generate agent files\n- `sidekit generate` - Generate agent files\n\n### Custom rules\n\nYou can create custom rules inside `.sidekit/rules` folder and reference them inside `.sidekit/config.json`\n\n#### Example\n\n.sidekit/rules/example.md\n\n```md\n---\nparent: workflow\nname: Example rule\ndescription: Example description of the rule\ntype: rule\n---\n\nThis content will be added to the generated agent files.\n```\n\n.sidekit/config.json\n\n```json\n{\n  \"rules\": [\"rules/example.md\"]\n}\n```\n\n## Important\n\nWhen modifying rules manually (without the command line) you must generate the agent files using `sidekit generate` command.\n"
+    }
+  ],
+  "presets": { "recommended": ["sidekit:documentation", "sidekit:automation"] }
 }

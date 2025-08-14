@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import color from "picocolors";
-import { initSidekit } from "../../sidekit.js";
 import { steps } from "../steps.js";
+import { initSidekit } from "../../sidekit/init_sidekit.js";
 
 export default defineCommand({
   meta: {
@@ -29,7 +29,7 @@ export default defineCommand({
 
     const agents = await steps.selectAgents();
 
-    await initSidekit({ cwd: args.cwd, agents });
+    await initSidekit({ path: args.cwd, agents });
 
     console.log(
       color.yellow(`

@@ -2,7 +2,8 @@ import { intro } from "@clack/prompts";
 import { defineCommand } from "citty";
 import color from "picocolors";
 import { steps } from "../steps.js";
-import { addConfigRules } from "../../config.js";
+import { updateSidekitConfig } from "../../sidekit/update_sidekit_config.js";
+import { loadSidekitConfig } from "../../sidekit/load_sidekit_config.js";
 
 export default defineCommand({
   meta: {
@@ -13,7 +14,7 @@ export default defineCommand({
     name: {
       type: "positional",
       description: "The name of the kit",
-      required: true,
+      required: false,
     },
     cwd: {
       type: "string",
@@ -23,14 +24,20 @@ export default defineCommand({
   async run({ args }) {
     intro(color.bgBlackBright(` sidekit add `));
 
-    const kit = await steps.fetchKit(args.name);
+    const config = await loadSidekitConfig({ cwd: args.cwd });
+
+    const name = args.name ?? (await steps.selectKit());
+
+    const kit = await steps.resolveKit(name);
     const presets = await steps.selectPresets(kit.presets);
     const rules = await steps.selectRules(kit.rules);
 
-    await addConfigRules({
+    config.rules.push(...rules.map((rule) => `${name}:${rule.id}`));
+    config.presets.push(...presets.map((preset) => `${name}:${preset}`));
+
+    updateSidekitConfig({
       cwd: args.cwd,
-      rules: rules.map((rule) => `${args.name}:${rule.id}`),
-      presets: presets.map((preset) => `${args.name}:${preset}`),
+      config,
     });
 
     await steps.generate(args.cwd);

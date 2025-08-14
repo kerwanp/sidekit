@@ -13,6 +13,10 @@ type: rule
 - Controllers MUST be named using `<name>_controller.ts` (eg. `auth_controller.ts`)
 - Controllers MUST ONLY export a default class (eg. `AuthController`)
 
+### Exceptions
+
+Exceptions should not be handled inside controllers. Instead you must use existing exceptions or custom ones.
+
 ### Example
 
 #### Dependency injection

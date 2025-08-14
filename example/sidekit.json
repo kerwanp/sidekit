@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/kerwanp/sidekit/refs/heads/main/schemas/kit.json",
+  "name": "Example",
+  "description": "Hello world",
+  "rules": [],
+  "presets": {}
+}

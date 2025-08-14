@@ -1,10 +1,7 @@
 {
-  "$schema": "https://raw.githubusercontent.com/kerwanp/sidekit/refs/heads/main/schemas/kit.json",
-  "name": "Test",
-  "description": "Test",
-  "presets": {
-    "recommended": ["adonisjs:structure", "adonisjs:controllers"]
-  },
+  "$schema": "../../schemas/kit.json",
+  "name": "AdonisJS",
+  "description": "Rules and guidelines for the AdonisJS framework",
   "rules": [
     {
       "parent": "adonisjs",
@@ -12,7 +9,23 @@
       "name": "Controllers",
       "description": "Guidelines for writing controllers",
       "type": "rule",
-      "content": "## Controllers\n\n### Rules\n\n- Controllers MUST be placed inside the `app/controllers` folder\n- Controllers MUST be named using `<name>_controller.ts` (eg. `auth_controller.ts`)\n- Controllers MUST ONLY export a default class (eg. `AuthController`)\n\n### Example\n\n#### Dependency injection\n\nDependencies (services) must be injected inside the constructor. When doing so `@inject` decorator MUST be added to the class.\n\n```ts\n@inject()\nexport default class PostsController {\n  constructor(private postsService: PostsService) {}\n\n  store() {}\n  view() {}\n}\n```\n\n### Sources\n\n- More information are available here <https://docs.adonisjs.com/guides/basics/controllers>\n"
+      "content": "## Controllers\n\n### Rules\n\n- Controllers MUST be placed inside the `app/controllers` folder\n- Controllers MUST be named using `<name>_controller.ts` (eg. `auth_controller.ts`)\n- Controllers MUST ONLY export a default class (eg. `AuthController`)\n\n### Exceptions\n\nExceptions should not be handled inside controllers. Instead you must use existing exceptions or custom ones.\n\n### Example\n\n#### Dependency injection\n\nDependencies (services) must be injected inside the constructor. When doing so `@inject` decorator MUST be added to the class.\n\n```ts\n@inject()\nexport default class PostsController {\n  constructor(private postsService: PostsService) {}\n\n  store() {}\n  view() {}\n}\n```\n\n### Sources\n\n- More information are available here <https://docs.adonisjs.com/guides/basics/controllers>\n"
+    },
+    {
+      "parent": "adonisjs",
+      "id": "env",
+      "name": "Environment variables",
+      "description": "Managing environment variables",
+      "type": "rule",
+      "content": "## Environment variables\n\n### Rules\n\n- You MUST NEVER use `process.env` to access an environment variable. Instead use `import { env } from '#start/env'`\n\n## Examples\n\n### start/env.ts\n\nThe `start/env.ts` file contains the schema for the environment variables. Every environment variable must be present here.\n\n```ts\nimport { Env } from \"@adonisjs/core/env\";\n\nexport default await Env.create(new URL(\"../\", import.meta.url), {\n  OPENAI_API_KEY: Env.schema.string(),\n}\n```\n\n### Usage\n\n```ts\nimport { env } from \"#start/env\";\n\nconsole.log(env.OPENAI_API_KEY);\n```\n\n### Sources\n\n- More information are available here <https://docs.adonisjs.com/guides/getting-started/environment-variables>\n"
+    },
+    {
+      "parent": "adonisjs",
+      "id": "exceptions",
+      "name": "Exceptions",
+      "description": "Documentation on how to manage exceptions",
+      "type": "rule",
+      "content": "## Exceptions\n\n### Rules\n\n- You MUST NOT throw classic errors. Instead you should create new ones or reuse existing.\n- The error messages MUST be clear and contain the context\n- You MUST NEVER EVER log credentials or sensitive informations\n- Exception files MUST be stored inside `app/exceptions` folder\n- Exception names must be suffixed with `Exception` (eg. `ExampleException`)\n- Exceptions MUST extends `Exception` from `@adonisjs/core/exceptions`\n\n### Examples\n\n#### Custom exception\n\n```ts\nimport { Exception } from \"@adonisjs/core/exceptions\";\n\nexport default class ExampleException extends Exception {\n  static status = 403; // Response status code\n  static code = \"E_EXAMPLE\"; // Identifier used for logging\n\n  constructor(user: User, message: string) {\n    super(`Example error with user ${user.id}: ${message}`);\n  }\n}\n```\n\n### Sources\n\n- More information are available here <https://docs.adonisjs.com/guides/basics/exception-handling>\n"
     },
     {
       "parent": "adonisjs",
@@ -22,5 +35,12 @@
       "type": "rule",
       "content": "## Structure\n\n```\nroot/\n├── app/                  # Core application logic (MVC pattern)\n│   ├── controllers/      # HTTP request handlers\n│   ├── exceptions/       # Custom error handling and exception classes\n│   ├── middleware/       # Request/response interceptors\n│   └── models/           # Lucid ORM models (Active Record pattern)\n├── bin/                  # Executable scripts\n├── config/               # Application configuration files\n├── database/             # Database-related files\n│   ├── factories/        # Model factories\n│   └── migrations/       # Database migration files\n├── start/                # Application bootstrapping\n│   ├── env.ts            # Environment variable validation\n│   ├── kernel.ts         # Middleware registration\n│   └── routes.ts         # Route definitions\n├── tests/                # Test suites\n│   ├── bootstrap.ts      # Test framework setup (japa)\n│   ├── unit/             # Unit tests\n│   ├── e2e/              # E2E tests\n│   └── functional/       # Integration tests\n├── ace.js                # AdonisJS CLI configuration\n├── adonisrc.ts           # AdonisJS runtime configuration\n├── eslint.config.js      # Code linting rules\n├── package.json          # Dependencies and scripts\n└── tsconfig.json         # TypeScript configuration\n```\n\n### Rules\n\n- You MUST NOT modify `ace.js` file\n"
     }
-  ]
+  ],
+  "presets": {
+    "recommended": [
+      "adonisjs:structure",
+      "adonisjs:controllers",
+      "adonisjs:exceptions"
+    ]
+  }
 }

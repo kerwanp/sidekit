@@ -1,7 +1,8 @@
 import { defineCommand } from "citty";
-import { initKit } from "../../../kit.js";
 import { intro, log, outro, text } from "@clack/prompts";
 import color from "picocolors";
+import { GlobalArgs } from "../../args.js";
+import { initKit } from "../../../kit/init_kit.js";
 
 export default defineCommand({
   meta: {
@@ -9,11 +10,7 @@ export default defineCommand({
     description: "Initialize a new Sidekit kit",
   },
   args: {
-    cwd: {
-      type: "string",
-      required: false,
-      default: process.cwd(),
-    },
+    ...GlobalArgs,
     name: {
       type: "positional",
       required: true,
@@ -42,7 +39,7 @@ export default defineCommand({
 
     if (typeof description === "symbol") process.exit();
 
-    await initKit({ cwd: args.cwd, name, description });
+    await initKit({ path: args.cwd, name, description });
 
     log.success(`${name} kit has been initialized`);
 

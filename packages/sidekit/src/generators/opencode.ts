@@ -1,20 +1,24 @@
 import { join } from "pathe";
 import { SidekitGenerator } from "../types.js";
 import { writeFile } from "node:fs/promises";
-import { groupRules } from "../rule.js";
+import { groupRules } from "../rules/group_rules.js";
 
 export const opencodeGenerator: SidekitGenerator = async ({ cwd, rules }) => {
-  const content = [];
+  const output = [];
   const path = join(cwd, `AGENTS.md`);
 
-  const groups = groupRules(rules);
+  const { global, groups } = groupRules(rules);
 
-  for (const [group, r] of groups.entries()) {
-    if (group) {
-      content.push(`=== ${group} guidelines ===\n`);
-    }
-    content.push(...r.map((rule) => rule.content));
+  for (const rule of global) {
+    output.push(rule.content);
   }
 
-  await writeFile(path, content.join("\n"));
+  for (const [group, rule] of Object.entries(groups)) {
+    if (group) {
+      output.push(`=== ${group} guidelines ===\n`);
+    }
+    output.push(...rule.map(({ content }) => content));
+  }
+
+  await writeFile(path, output.join("\n"));
 };

@@ -1,8 +1,10 @@
-import { multiselect, spinner } from "@clack/prompts";
+import { multiselect, select, spinner } from "@clack/prompts";
 import { SidekitRule } from "../types.js";
-import { fetchKit } from "../registry.js";
-import { fetchRules, generate } from "../sidekit.js";
-import { readConfig } from "../config.js";
+import { resolveKit } from "../kit/resolve/resolve_kit.js";
+import { loadRules } from "../rules/load_rules.js";
+import { generate } from "../generators/generate.js";
+import { loadSidekitConfig } from "../sidekit/load_sidekit_config.js";
+import { resolveRegistry } from "../registry/resolve_registry.js";
 
 export const steps = {
   async selectAgents() {
@@ -23,13 +25,29 @@ export const steps = {
     if (typeof agents === "symbol") process.exit();
     return agents;
   },
-  async fetchKit(name: string) {
+  async selectKit() {
+    const registry = await resolveRegistry();
+
+    const selected = await select({
+      message: "What kit do you want to add?",
+      options: registry.kits.map((kit) => ({
+        label: kit.name,
+        description: kit.description,
+        value: kit.id,
+      })),
+    });
+
+    if (typeof selected === "symbol") process.exit();
+
+    return selected;
+  },
+  async resolveKit(id: string) {
     const s = spinner();
-    s.start(`Fetching ${name} kit`);
+    s.start(`Fetching ${id} kit`);
 
-    const kit = await fetchKit({ input: name });
+    const kit = await resolveKit(id);
 
-    s.stop(`Fetched ${name} kit ✔`);
+    s.stop(`Fetched ${id} kit ✔`);
 
     return kit;
   },
@@ -65,8 +83,12 @@ export const steps = {
   },
   async generate(cwd: string) {
     const s = spinner();
-    const config = await readConfig({ cwd });
-    const rules = await fetchRules({ cwd, config });
+    const config = await loadSidekitConfig({ cwd });
+    const rules = await loadRules({
+      path: cwd,
+      rules: config.rules,
+      presets: config.presets,
+    });
 
     s.start(`Generating files for ${config.agents.join(", ")}`);
     await generate({ config, cwd, rules });

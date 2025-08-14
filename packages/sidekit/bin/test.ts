@@ -7,25 +7,12 @@ import { BASE_URL } from "../tests/helpers.js";
 
 processCLIArgs(process.argv.slice(2));
 configure({
-  suites: [
-    {
-      name: "units",
-      files: ["tests/units/**/*.spec.(js|ts)"],
-    },
-    {
-      name: "integration",
-      files: ["tests/integration/**/*.spec.(js|ts)"],
-    },
-    {
-      name: "functional",
-      files: ["tests/functional/**/*.spec.(js|ts)"],
-    },
-  ],
+  files: ["tests/**/*.spec.ts"],
   plugins: [
     assert(),
     expect(),
     expectTypeOf(),
-    fileSystem({ basePath: BASE_URL, autoClean: false }),
+    fileSystem({ basePath: BASE_URL }),
   ],
 });
 

@@ -1,0 +1,20 @@
+{
+  "$schema": "../schemas/registry.json",
+  "kits": [
+    {
+      "id": "adonisjs",
+      "name": "AdonisJS",
+      "description": "Rules and guidelines for the AdonisJS framework"
+    },
+    {
+      "id": "sidekit",
+      "name": "Sidekit",
+      "description": "AI Guidelines for using Sidekit"
+    },
+    {
+      "id": "workflow",
+      "name": "Workflow",
+      "description": "Set of rules for improved workflow"
+    }
+  ]
+}
