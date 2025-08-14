@@ -1,4 +1,3 @@
-import { intro, multiselect, select } from "@clack/prompts";
 import { defineCommand } from "citty";
 import color from "picocolors";
 import { initSidekit } from "../../sidekit.js";
