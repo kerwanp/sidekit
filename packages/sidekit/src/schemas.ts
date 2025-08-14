@@ -17,7 +17,7 @@ const kit = z.object({
 });
 
 const config = z.object({
-  agent: z.enum(["claude", "opencode"]),
+  agents: z.array(z.enum(["claude", "opencode"])),
   rules: z.array(z.string()),
   presets: z.array(z.string()),
 });

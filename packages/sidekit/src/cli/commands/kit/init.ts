@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { initSidekit } from "../../../kit.js";
+import { initKit } from "../../../kit.js";
 import { intro, log, outro, text } from "@clack/prompts";
 import color from "picocolors";
 
@@ -42,7 +42,7 @@ export default defineCommand({
 
     if (typeof description === "symbol") process.exit();
 
-    await initSidekit({ cwd: args.cwd, name, description });
+    await initKit({ cwd: args.cwd, name, description });
 
     log.success(`${name} kit has been initialized`);
 

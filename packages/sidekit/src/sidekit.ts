@@ -8,17 +8,59 @@ import {
   SidekitKit,
   SidekitRule,
 } from "./types.js";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { parseRule } from "./rule.js";
+import { updateConfig } from "./config.js";
+
+export type InitSidekitOptions = {
+  cwd: string;
+  agents: SidekitConfig["agents"];
+};
+
+export async function initSidekit({ cwd, agents }: InitSidekitOptions) {
+  const path = join(cwd, ".sidekit");
+  await mkdir(path);
+
+  await updateConfig({
+    cwd,
+    config: {
+      agents,
+      presets: ["sidekit:recommended"],
+      rules: ["rules/introduction.md"],
+    },
+  });
+
+  await mkdir(join(path, "rules"));
+
+  const content = `
+---
+name: Introduction
+description: |
+  This file is used as the header and introduction for coding agents.
+  You might want to add some introduction about your project and repository.
+type: rule
+---
+
+# Agent guidelines and rules
+
+This file provides guidance to Coding agents when working with code in this repository.
+`;
+
+  await writeFile(join(path, "rules", "introduction.md"), content);
+}
 
 export async function generate(options: SidekitGeneratorOptions) {
-  if (options.config.agent === "claude") {
-    await claudeGenerator(options);
-  }
+  await Promise.all(
+    options.config.agents.map(async (agent) => {
+      if (agent === "claude") {
+        await claudeGenerator(options);
+      }
 
-  if (options.config.agent === "opencode") {
-    await opencodeGenerator(options);
-  }
+      if (agent === "opencode") {
+        await opencodeGenerator(options);
+      }
+    }),
+  );
 }
 
 export type FetchRulesOptions = {

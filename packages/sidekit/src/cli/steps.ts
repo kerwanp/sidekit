@@ -5,6 +5,24 @@ import { fetchRules, generate } from "../sidekit.js";
 import { readConfig } from "../config.js";
 
 export const steps = {
+  async selectAgents() {
+    const agents = await multiselect({
+      message: "What coding agents do you use?",
+      options: [
+        {
+          label: "Opencode",
+          value: "opencode",
+        },
+        {
+          label: "Claude code",
+          value: "claude",
+        },
+      ],
+    });
+
+    if (typeof agents === "symbol") process.exit();
+    return agents;
+  },
   async fetchKit(name: string) {
     const s = spinner();
     s.start(`Fetching ${name} kit`);
@@ -50,8 +68,8 @@ export const steps = {
     const config = await readConfig({ cwd });
     const rules = await fetchRules({ cwd, config });
 
-    s.start(`Generating files for ${config.agent}`);
+    s.start(`Generating files for ${config.agents.join(", ")}`);
     await generate({ config, cwd, rules });
-    s.stop(`Generated files for ${config.agent} ✔`);
+    s.stop(`Generated files for ${config.agents.join(", ")} ✔`);
   },
 };

@@ -15,7 +15,7 @@ export type InitKitOptions = {
 /**
  * Initialize a new kit project.
  */
-export async function initSidekit({ cwd, name, description }: InitKitOptions) {
+export async function initKit({ cwd, name, description }: InitKitOptions) {
   await updateKitConfig({
     cwd,
     config: {
