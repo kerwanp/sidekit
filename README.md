@@ -1,7 +1,9 @@
 <div align="center">
 <br/>
 
-## Sidekit
+<p align="center">
+    <img width="300" alt="Sidekit" src=".github/images/logo.png">
+</p>
 
 ### Boost your coding agent with pre-defined rules
 
