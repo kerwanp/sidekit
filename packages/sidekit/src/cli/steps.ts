@@ -1,10 +1,10 @@
 import { multiselect, select, spinner } from "@clack/prompts";
 import { SidekitRule } from "../types.js";
-import { resolveKit } from "../kit/resolve/resolve_kit.js";
-import { loadRules } from "../rules/load_rules.js";
+import { resolveKit } from "@sidekit/core/kit";
+import { loadRules } from "@sidekit/core/rules";
 import { generate } from "../generators/generate.js";
-import { loadSidekitConfig } from "../sidekit/load_sidekit_config.js";
-import { resolveRegistry } from "../registry/resolve_registry.js";
+import { loadSidekitConfig } from "@sidekit/core";
+import { resolveRegistry } from "@sidekit/core/registry";
 
 export const steps = {
   async selectAgents() {

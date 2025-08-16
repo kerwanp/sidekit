@@ -35,7 +35,7 @@ export default defineCommand({
     config.rules.push(...rules.map((rule) => `${name}:${rule.id}`));
     config.presets.push(...presets.map((preset) => `${name}:${preset}`));
 
-    updateSidekitConfig({
+    await updateSidekitConfig({
       cwd: args.cwd,
       config,
     });

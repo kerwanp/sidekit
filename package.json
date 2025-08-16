@@ -21,7 +21,9 @@
   "workspaces": [
     "apps/*",
     "packages/*",
+    "packages/@sidekit/*",
     "playground",
+    "docs",
     "example"
   ]
 }

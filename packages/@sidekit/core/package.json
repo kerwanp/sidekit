@@ -1,0 +1,74 @@
+{
+  "name": "@sidekit/core",
+  "type": "module",
+  "version": "0.0.0-alpha.3",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kerwanp/sidekit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kerwanp/sidekit/issues"
+  },
+  "homepage": "https://github.com/kerwanp/sidekit",
+  "files": [
+    "build",
+    "!build/tests",
+    "!build/bin/test*"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint .",
+    "quick:test": "node --import=./tsnode.esm.js --enable-source-maps bin/test.ts",
+    "test": "c8 yarn quick:test",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch"
+  },
+  "exports": {
+    ".": "./build/src/index.js",
+    "./kit": "./build/src/kit/index.js",
+    "./registry": "./build/src/registry/index.js",
+    "./rules": "./build/src/rules/index.js"
+  },
+  "devDependencies": {
+    "@adonisjs/eslint-config": "^2.1.2",
+    "@adonisjs/tsconfig": "^1.4.1",
+    "@japa/assert": "^4.1.1",
+    "@japa/expect": "^3.0.6",
+    "@japa/expect-type": "^2.0.3",
+    "@japa/file-system": "^2.3.2",
+    "@japa/runner": "^4.4.0",
+    "@swc/core": "^1.13.3",
+    "@types/node": "^24.2.1",
+    "c8": "^10.1.3",
+    "eslint": "^9.33.0",
+    "example": "workspace:*",
+    "execa": "^9.6.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "packageManager": "yarn@4.9.2",
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "@sidekit/search": "workspace:*",
+    "citty": "^0.1.6",
+    "effect": "^3.17.7",
+    "front-matter": "^4.0.2",
+    "mlly": "^1.7.4",
+    "pathe": "^2.0.3",
+    "picocolors": "^1.1.1",
+    "prettier": "^3.6.2",
+    "zod": "^4.0.17"
+  },
+  "keywords": [
+    "cli",
+    "ai",
+    "cursor",
+    "opencode",
+    "claude",
+    "copilot"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
+  }
+}

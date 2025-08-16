@@ -1,0 +1,7019 @@
+---
+title: Rules
+description: AdonisJS rules
+---
+
+## Presets
+### adonisjs:recommended
+- [adonisjs:adonisjs:structure](#adonisjsadonisjs:structure)
+- [adonisjs:adonisjs:controllers](#adonisjsadonisjs:controllers)
+- [adonisjs:adonisjs:models](#adonisjsadonisjs:models)
+- [adonisjs:adonisjs:middleware](#adonisjsadonisjs:middleware)
+- [adonisjs:adonisjs:validation](#adonisjsadonisjs:validation)
+- [adonisjs:adonisjs:env](#adonisjsadonisjs:env)
+- [adonisjs:adonisjs:security](#adonisjsadonisjs:security)
+- [adonisjs:adonisjs:errors](#adonisjsadonisjs:errors)
+### adonisjs:fullstack
+- [adonisjs:adonisjs:structure](#adonisjsadonisjs:structure)
+- [adonisjs:adonisjs:controllers](#adonisjsadonisjs:controllers)
+- [adonisjs:adonisjs:models](#adonisjsadonisjs:models)
+- [adonisjs:adonisjs:middleware](#adonisjsadonisjs:middleware)
+- [adonisjs:adonisjs:validation](#adonisjsadonisjs:validation)
+- [adonisjs:adonisjs:auth](#adonisjsadonisjs:auth)
+- [adonisjs:adonisjs:providers](#adonisjsadonisjs:providers)
+- [adonisjs:adonisjs:config](#adonisjsadonisjs:config)
+- [adonisjs:adonisjs:env](#adonisjsadonisjs:env)
+- [adonisjs:adonisjs:testing](#adonisjsadonisjs:testing)
+- [adonisjs:adonisjs:security](#adonisjsadonisjs:security)
+- [adonisjs:adonisjs:performance](#adonisjsadonisjs:performance)
+- [adonisjs:adonisjs:errors](#adonisjsadonisjs:errors)
+- [adonisjs:adonisjs:websockets](#adonisjsadonisjs:websockets)
+### adonisjs:api
+- [adonisjs:adonisjs:structure](#adonisjsadonisjs:structure)
+- [adonisjs:adonisjs:controllers](#adonisjsadonisjs:controllers)
+- [adonisjs:adonisjs:models](#adonisjsadonisjs:models)
+- [adonisjs:adonisjs:middleware](#adonisjsadonisjs:middleware)
+- [adonisjs:adonisjs:validation](#adonisjsadonisjs:validation)
+- [adonisjs:adonisjs:auth](#adonisjsadonisjs:auth)
+- [adonisjs:adonisjs:config](#adonisjsadonisjs:config)
+- [adonisjs:adonisjs:env](#adonisjsadonisjs:env)
+- [adonisjs:adonisjs:testing](#adonisjsadonisjs:testing)
+- [adonisjs:adonisjs:security](#adonisjsadonisjs:security)
+- [adonisjs:adonisjs:performance](#adonisjsadonisjs:performance)
+- [adonisjs:adonisjs:errors](#adonisjsadonisjs:errors)
+- [adonisjs:adonisjs:api](#adonisjsadonisjs:api)
+### adonisjs:development
+- [adonisjs:adonisjs:commands](#adonisjsadonisjs:commands)
+- [adonisjs:adonisjs:packages](#adonisjsadonisjs:packages)
+- [adonisjs:adonisjs:testing](#adonisjsadonisjs:testing)
+- [adonisjs:adonisjs:deployment](#adonisjsadonisjs:deployment)
+## Rules
+### adonisjs:api
+Guidelines for building RESTful APIs with AdonisJS 6
+````mdx
+## API Development Patterns
+
+### RESTful API Structure
+
+Follow RESTful conventions for API design:
+
+```typescript
+// start/routes.ts - API Routes
+import router from '@adonisjs/core/services/router'
+import { middleware } from './kernel.js'
+
+// ✅ API versioning
+router.group(() => {
+  // ✅ Resource-based routes
+  router.resource('users', '#controllers/api/v1/users_controller').apiOnly()
+  router.resource('posts', '#controllers/api/v1/posts_controller').apiOnly()
+  router.resource('posts.comments', '#controllers/api/v1/comments_controller').apiOnly()
+  
+  // ✅ Custom actions
+  router.post('users/:id/activate', '#controllers/api/v1/users_controller.activate')
+  router.post('posts/:id/publish', '#controllers/api/v1/posts_controller.publish')
+  router.get('posts/:id/related', '#controllers/api/v1/posts_controller.related')
+  
+}).prefix('api/v1').middleware([
+  middleware.auth({ guards: ['api'] }),
+  middleware.throttle({ max: 1000, duration: '1h' })
+])
+
+// ✅ Public API routes
+router.group(() => {
+  router.get('posts', '#controllers/api/v1/posts_controller.index')
+  router.get('posts/:id', '#controllers/api/v1/posts_controller.show')
+  router.get('categories', '#controllers/api/v1/categories_controller.index')
+}).prefix('api/v1/public').middleware([
+  middleware.throttle({ max: 100, duration: '1h' })
+])
+```
+
+### API Controller Base Class
+
+```typescript
+// app/controllers/api/base_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+
+export default class BaseApiController {
+  // ✅ Success response
+  protected successResponse(
+    ctx: HttpContext,
+    data: any,
+    message?: string,
+    statusCode: number = 200
+  ) {
+    return ctx.response.status(statusCode).json({
+      success: true,
+      data,
+      message
+    })
+  }
+
+  // ✅ Error response
+  protected errorResponse(
+    ctx: HttpContext,
+    message: string,
+    statusCode: number = 400
+  ) {
+    return ctx.response.status(statusCode).json({
+      success: false,
+      error: message
+    })
+  }
+
+  // ✅ Pagination parameters
+  protected getPaginationParams(ctx: HttpContext) {
+    const page = Math.max(1, parseInt(ctx.request.input('page', '1')))
+    const limit = Math.min(100, parseInt(ctx.request.input('limit', '20')))
+    return { page, limit }
+  }
+}
+```
+
+### API Resource Controllers
+
+```typescript
+// app/controllers/api/v1/users_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import BaseApiController from '#controllers/api/base_controller'
+import User from '#models/user'
+import { createUserValidator, updateUserValidator } from '#validators/user_validator'
+
+export default class UsersController extends BaseApiController {
+  // ✅ GET /api/v1/users
+  async index({ request, response }: HttpContext) {
+    const { page, limit } = this.getPaginationParams({ request } as HttpContext)
+    const users = await User.query().paginate(page, limit)
+    
+    return this.successResponse(
+      { response } as HttpContext,
+      users,
+      'Users retrieved successfully'
+    )
+  }
+
+  // ✅ GET /api/v1/users/:id
+  async show({ params, response }: HttpContext) {
+    const user = await User.findOrFail(params.id)
+    
+    return this.successResponse(
+      { response } as HttpContext,
+      user,
+      'User retrieved successfully'
+    )
+  }
+
+  // ✅ POST /api/v1/users
+  async store({ request, response }: HttpContext) {
+    const data = await request.validateUsing(createUserValidator)
+    const user = await User.create(data)
+    
+    return this.successResponse(
+      { response } as HttpContext,
+      user,
+      'User created successfully',
+      201
+    )
+  }
+
+  // ✅ PUT /api/v1/users/:id
+  async update({ params, request, response }: HttpContext) {
+    const user = await User.findOrFail(params.id)
+    const data = await request.validateUsing(updateUserValidator)
+    await user.merge(data).save()
+    
+    return this.successResponse(
+      { response } as HttpContext,
+      user,
+      'User updated successfully'
+    )
+  }
+
+  // ✅ DELETE /api/v1/users/:id
+  async destroy({ params, response }: HttpContext) {
+    const user = await User.findOrFail(params.id)
+    await user.delete()
+    
+    return this.successResponse(
+      { response } as HttpContext,
+      null,
+      'User deleted successfully'
+    )
+  }
+}
+```
+
+### API Serialization
+
+```typescript
+// app/serializers/user_serializer.ts
+export default class UserSerializer {
+  // ✅ Transform user data for API responses
+  static serialize(user: any) {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.fullName,
+      role: user.role,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    }
+  }
+
+  // ✅ Serialize collection
+  static serializeCollection(users: any[]) {
+    return users.map(user => this.serialize(user))
+  }
+
+  // ✅ Public user data
+  static serializeForPublic(user: any) {
+    return {
+      id: user.id,
+      name: user.fullName
+    }
+  }
+}
+```
+
+### API Validation
+
+```typescript
+// app/validators/api/user_validator.ts
+import vine from '@vinejs/vine'
+
+// ✅ API-specific validators
+export const createUserApiValidator = vine.compile(
+  vine.object({
+    email: vine.string().email().normalizeEmail(),
+    password: vine.string().minLength(8).maxLength(32),
+    fullName: vine.string().minLength(2).maxLength(100),
+    role: vine.enum(['user', 'admin', 'moderator']).optional(),
+    metadata: vine.object({
+      source: vine.string().optional(),
+      referrer: vine.string().optional(),
+      utm: vine.object({
+        source: vine.string().optional(),
+        medium: vine.string().optional(),
+        campaign: vine.string().optional()
+      }).optional()
+    }).optional()
+  })
+)
+
+export const updateUserApiValidator = vine.compile(
+  vine.object({
+    email: vine.string().email().normalizeEmail().optional(),
+    fullName: vine.string().minLength(2).maxLength(100).optional(),
+    role: vine.enum(['user', 'admin', 'moderator']).optional(),
+    isActive: vine.boolean().optional()
+  })
+)
+
+export const bulkActionValidator = vine.compile(
+  vine.object({
+    ids: vine.array(vine.number().positive()).minLength(1).maxLength(100),
+    action: vine.enum(['activate', 'deactivate', 'delete'])
+  })
+)
+```
+
+### API Middleware
+
+```typescript
+// app/middleware/api_version_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+export default class ApiVersionMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    const { request, response } = ctx
+    
+    // ✅ API version from header or URL
+    const version = request.header('api-version') || 
+                   request.url().match(/\/api\/(v\d+)\//)?.[1] || 
+                   'v1'
+
+    // Add version to context
+    ctx.apiVersion = version
+
+    // ✅ Set API response headers
+    response.header('API-Version', version)
+    response.header('Content-Type', 'application/json')
+    response.header('X-RateLimit-Limit', '1000')
+    response.header('X-RateLimit-Window', '1h')
+
+    return await next()
+  }
+}
+```
+
+### API Rate Limiting
+
+```typescript
+// app/middleware/api_rate_limit_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import redis from '@adonisjs/redis/services/main'
+
+export default class ApiRateLimitMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: { maxRequests: number; windowMs: number }
+  ) {
+    const { request, response } = ctx
+    
+    const key = `rate_limit:${request.ip()}`
+    const current = await redis.get(key)
+    const requests = current ? parseInt(current) : 0
+
+    if (requests >= options.maxRequests) {
+      response.header('X-RateLimit-Limit', options.maxRequests.toString())
+      response.header('X-RateLimit-Remaining', '0')
+
+      return response.status(429).json({
+        success: false,
+        error: 'Rate limit exceeded'
+      })
+    }
+
+    // Increment counter
+    await redis.incr(key)
+    await redis.expire(key, Math.ceil(options.windowMs / 1000))
+
+    // Add headers
+    response.header('X-RateLimit-Limit', options.maxRequests.toString())
+    response.header('X-RateLimit-Remaining', (options.maxRequests - requests - 1).toString())
+
+    return await next()
+  }
+}
+```
+
+### API Documentation
+
+```typescript
+// app/controllers/api/docs_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+
+export default class DocsController {
+  // ✅ Basic API documentation
+  async index({ response }: HttpContext) {
+    const spec = {
+      openapi: '3.0.0',
+      info: {
+        title: 'My API',
+        version: '1.0.0'
+      },
+      paths: {
+        '/users': {
+          get: {
+            summary: 'List users',
+            responses: {
+              200: {
+                description: 'Users retrieved successfully'
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return response.json(spec)
+  }
+}
+```
+
+### API Testing
+
+```typescript
+// tests/functional/api/users.spec.ts
+import { test } from '@japa/runner'
+import { UserFactory } from '#factories/user_factory'
+
+test.group('Users API', () => {
+  test('GET /api/v1/users should return paginated users', async ({ client }) => {
+    await UserFactory.createMany(25)
+
+    const response = await client.get('/api/v1/users')
+      .header('Authorization', 'Bearer valid-token')
+      .qs({ page: 1, limit: 10 })
+
+    response.assertStatus(200)
+    response.assertBodyContains({
+      success: true,
+      data: (users: any[]) => users.length === 10,
+      meta: {
+        pagination: {
+          currentPage: 1,
+          perPage: 10,
+          total: 25
+        }
+      }
+    })
+  })
+
+  test('POST /api/v1/users should create user with valid data', async ({ client }) => {
+    const userData = {
+      email: 'test@example.com',
+      password: 'password123',
+      fullName: 'Test User'
+    }
+
+    const response = await client.post('/api/v1/users')
+      .header('Authorization', 'Bearer admin-token')
+      .json(userData)
+
+    response.assertStatus(201)
+    response.assertBodyContains({
+      success: true,
+      data: {
+        email: userData.email,
+        name: userData.fullName
+      },
+      message: 'User created successfully'
+    })
+  })
+
+  test('should handle rate limiting', async ({ client }) => {
+    // Make requests up to the limit
+    for (let i = 0; i < 100; i++) {
+      await client.get('/api/v1/users')
+        .header('Authorization', 'Bearer valid-token')
+    }
+
+    // This request should be rate limited
+    const response = await client.get('/api/v1/users')
+      .header('Authorization', 'Bearer valid-token')
+
+    response.assertStatus(429)
+    response.assertBodyContains({
+      success: false,
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED'
+      }
+    })
+  })
+})
+```
+
+### API Best Practices
+
+#### DO's
+
+```typescript
+// ✅ Use proper HTTP methods
+router.get('users', 'UsersController.index')       // List
+router.post('users', 'UsersController.store')      // Create
+router.get('users/:id', 'UsersController.show')    // Read
+router.put('users/:id', 'UsersController.update')  // Update
+router.delete('users/:id', 'UsersController.destroy') // Delete
+
+// ✅ Use consistent response format
+{
+  "success": true,
+  "data": { ... },
+  "message": "Operation successful",
+  "meta": { ... }
+}
+
+// ✅ Include pagination metadata
+{
+  "data": [...],
+  "meta": {
+    "pagination": {
+      "currentPage": 1,
+      "perPage": 20,
+      "total": 100,
+      "lastPage": 5
+    }
+  }
+}
+
+// ✅ Use proper status codes
+201 // Created
+200 // Success
+404 // Not Found
+422 // Validation Error
+429 // Rate Limited
+```
+
+#### DON'Ts
+
+```typescript
+// ❌ Inconsistent response formats
+{ "users": [...] }  // Sometimes
+{ "data": [...] }   // Other times
+
+// ❌ Exposing sensitive data
+{
+  "user": {
+    "password": "hashed_password",
+    "secret_key": "sensitive_data"
+  }
+}
+
+// ❌ Not handling edge cases
+// Missing pagination, error handling, validation
+
+// ❌ Poor endpoint naming
+POST /api/getUserById
+GET /api/createUser
+```
+
+### Sources
+
+- [AdonisJS API Development](https://docs.adonisjs.com/guides/controllers#api-controllers)
+- [RESTful API Design](https://restfulapi.net/)
+- [OpenAPI Specification](https://swagger.io/specification/)
+- [HTTP Status Codes](https://httpstatuses.com/)
+````
+### adonisjs:auth
+Guidelines for authentication and authorization in AdonisJS 6
+````mdx
+## Authentication and Authorization
+
+### Authentication Setup
+
+Install the auth package and configure guards:
+
+```bash
+node ace add @adonisjs/auth --guard=session
+# or
+node ace add @adonisjs/auth --guard=access_tokens
+```
+
+### Authentication Configuration
+
+```typescript
+// config/auth.ts
+import { defineConfig } from '@adonisjs/auth'
+import { sessionGuard, sessionUserProvider } from '@adonisjs/auth/session'
+import { accessTokensGuard, accessTokensUserProvider } from '@adonisjs/auth/access_tokens'
+
+const authConfig = defineConfig({
+  default: 'web',
+  guards: {
+    // ✅ Session-based authentication for web apps
+    web: sessionGuard({
+      provider: sessionUserProvider({
+        model: () => import('#models/user')
+      })
+    }),
+    
+    // ✅ Token-based authentication for APIs
+    api: accessTokensGuard({
+      provider: accessTokensUserProvider({
+        model: () => import('#models/user'),
+        tokens: 'accessTokens'
+      })
+    })
+  }
+})
+
+export default authConfig
+```
+
+### User Model for Authentication
+
+```typescript
+// app/models/user.ts
+import { DateTime } from 'luxon'
+import hash from '@adonisjs/core/services/hash'
+import { compose } from '@adonisjs/core/helpers'
+import { BaseModel, column, beforeSave } from '@adonisjs/lucid/orm'
+import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
+import { DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
+
+const AuthFinder = withAuthFinder(() => hash.use('scrypt'), {
+  uids: ['email'],
+  passwordColumnName: 'password'
+})
+
+export default class User extends compose(BaseModel, AuthFinder) {
+  @column({ isPrimary: true })
+  declare id: number
+
+  @column()
+  declare email: string
+
+  @column()
+  declare fullName: string
+
+  @column({ serializeAs: null })
+  declare password: string
+
+  @column()
+  declare role: string
+
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+
+  // ✅ For access tokens authentication
+  static accessTokens = DbAccessTokensProvider.forModel(User)
+
+  // ✅ Password hashing
+  @beforeSave()
+  static async hashPassword(user: User) {
+    if (user.$dirty.password) {
+      user.password = await hash.make(user.password)
+    }
+  }
+
+  // ✅ Password verification
+  async verifyPassword(plainPassword: string) {
+    return await hash.verify(this.password, plainPassword)
+  }
+}
+```
+
+### Authentication Controller
+
+```typescript
+// app/controllers/auth_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import User from '#models/user'
+import { loginValidator, registerValidator } from '#validators/auth_validator'
+
+export default class AuthController {
+  // ✅ Session-based login
+  async login({ request, response, auth }: HttpContext) {
+    const { email, password } = await request.validateUsing(loginValidator)
+
+    try {
+      const user = await User.verifyCredentials(email, password)
+      await auth.use('web').login(user)
+      
+      return response.json({
+        message: 'Login successful',
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role
+        }
+      })
+    } catch {
+      return response.unauthorized({
+        error: 'Invalid credentials'
+      })
+    }
+  }
+
+  // ✅ API token-based login
+  async apiLogin({ request, response }: HttpContext) {
+    const { email, password } = await request.validateUsing(loginValidator)
+
+    try {
+      const user = await User.verifyCredentials(email, password)
+      const token = await User.accessTokens.create(user, ['*'], {
+        expiresIn: '30 days'
+      })
+      
+      return response.json({
+        message: 'Login successful',
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role
+        },
+        token: {
+          type: 'Bearer',
+          value: token.value!.release()
+        }
+      })
+    } catch {
+      return response.unauthorized({
+        error: 'Invalid credentials'
+      })
+    }
+  }
+
+  // ✅ User registration
+  async register({ request, response }: HttpContext) {
+    const data = await request.validateUsing(registerValidator)
+    
+    try {
+      const user = await User.create({
+        ...data,
+        role: 'user' // Default role
+      })
+
+      return response.status(201).json({
+        message: 'Registration successful',
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role
+        }
+      })
+    } catch (error) {
+      if (error.code === '23505') { // Unique constraint violation
+        return response.conflict({
+          error: 'Email already registered'
+        })
+      }
+      throw error
+    }
+  }
+
+  // ✅ Session logout
+  async logout({ response, auth }: HttpContext) {
+    await auth.use('web').logout()
+    return response.json({
+      message: 'Logout successful'
+    })
+  }
+
+  // ✅ API token logout
+  async apiLogout({ response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const token = auth.use('api').tokenOrFail()
+    
+    await User.accessTokens.delete(user, token.identifier)
+    
+    return response.json({
+      message: 'Logout successful'
+    })
+  }
+
+  // ✅ Get current user profile
+  async me({ response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    
+    return response.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }
+    })
+  }
+}
+```
+
+### Authentication Validators
+
+```typescript
+// app/validators/auth_validator.ts
+import vine from '@vinejs/vine'
+
+export const loginValidator = vine.compile(
+  vine.object({
+    email: vine.string().email().normalizeEmail(),
+    password: vine.string().minLength(1),
+    rememberMe: vine.boolean().optional()
+  })
+)
+
+export const registerValidator = vine.compile(
+  vine.object({
+    email: vine.string().email().normalizeEmail(),
+    password: vine.string().minLength(8).maxLength(32).confirmed(),
+    fullName: vine.string().minLength(2).maxLength(100),
+    agreeToTerms: vine.boolean().isTrue()
+  })
+)
+
+export const changePasswordValidator = vine.compile(
+  vine.object({
+    currentPassword: vine.string(),
+    password: vine.string().minLength(8).confirmed()
+  })
+)
+```
+
+### Authentication Middleware
+
+```typescript
+// app/middleware/auth_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+export default class AuthMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: { guards?: string[] } = {}
+  ) {
+    const guards = options.guards || ['web']
+    
+    for (const guard of guards) {
+      try {
+        await ctx.auth.use(guard).check()
+        if (ctx.auth.use(guard).isAuthenticated) {
+          return await next()
+        }
+      } catch {
+        // Continue to next guard
+      }
+    }
+
+    return ctx.response.unauthorized({
+      error: 'Authentication required'
+    })
+  }
+}
+```
+
+### Authorization Patterns
+
+#### Role-Based Access Control
+
+```typescript
+// app/middleware/role_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+export default class RoleMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: { roles: string[] }
+  ) {
+    const user = ctx.auth.getUserOrFail()
+    
+    if (!options.roles.includes(user.role)) {
+      return ctx.response.forbidden({
+        error: 'Insufficient permissions'
+      })
+    }
+
+    return await next()
+  }
+}
+
+// Usage in routes
+router.group(() => {
+  router.get('admin/users', '#controllers/admin/users_controller.index')
+}).middleware([
+  middleware.auth(),
+  middleware.role({ roles: ['admin'] })
+])
+```
+
+#### Policy-Based Authorization
+
+```typescript
+// app/policies/post_policy.ts
+import User from '#models/user'
+import Post from '#models/post'
+
+export default class PostPolicy {
+  static async canUpdate(user: User, post: Post) {
+    return user.role === 'admin' || post.userId === user.id
+  }
+
+  static async canDelete(user: User, post: Post) {
+    return user.role === 'admin' || post.userId === user.id
+  }
+}
+
+// Usage in controller
+export default class PostsController {
+  async update({ params, request, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const post = await Post.findOrFail(params.id)
+    
+    if (!await PostPolicy.canUpdate(user, post)) {
+      return response.forbidden({
+        error: 'Not authorized to update this post'
+      })
+    }
+
+    const data = await request.validateUsing(updatePostValidator)
+    await post.merge(data).save()
+    
+    return response.json({ data: post })
+  }
+}
+```
+
+### Password Management
+
+```typescript
+// app/controllers/password_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import User from '#models/user'
+import { changePasswordValidator } from '#validators/auth_validator'
+
+export default class PasswordController {
+  // ✅ Change password for authenticated user
+  async change({ request, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const { currentPassword, password } = await request.validateUsing(changePasswordValidator)
+
+    // Verify current password
+    if (!await user.verifyPassword(currentPassword)) {
+      return response.badRequest({
+        error: 'Current password is incorrect'
+      })
+    }
+
+    // Update password
+    user.password = password
+    await user.save()
+
+    return response.json({
+      message: 'Password changed successfully'
+    })
+  }
+
+  // ✅ Request password reset
+  async requestReset({ request, response }: HttpContext) {
+    const { email } = await request.validateUsing(
+      vine.compile(vine.object({
+        email: vine.string().email().normalizeEmail()
+      }))
+    )
+
+    const user = await User.findBy('email', email)
+    if (!user) {
+      return response.json({
+        message: 'If the email exists, a reset link has been sent'
+      })
+    }
+
+    // Generate and send reset token
+    // Implementation depends on your requirements
+    
+    return response.json({
+      message: 'Password reset link sent'
+    })
+  }
+}
+```
+
+### API Authentication Routes
+
+```typescript
+// start/routes.ts
+import router from '@adonisjs/core/services/router'
+import { middleware } from './kernel.js'
+
+// ✅ Public authentication routes
+router.group(() => {
+  router.post('login', '#controllers/auth_controller.login')
+  router.post('register', '#controllers/auth_controller.register')
+  router.post('forgot-password', '#controllers/password_controller.requestReset')
+  router.post('reset-password', '#controllers/password_controller.reset')
+}).prefix('auth')
+
+// ✅ API routes with token authentication
+router.group(() => {
+  router.post('login', '#controllers/auth_controller.apiLogin')
+  router.post('logout', '#controllers/auth_controller.apiLogout')
+  router.get('me', '#controllers/auth_controller.me')
+  router.put('password', '#controllers/password_controller.change')
+}).prefix('api/auth').middleware([middleware.auth({ guards: ['api'] })])
+
+// ✅ Protected API routes
+router.group(() => {
+  router.resource('posts', '#controllers/posts_controller').apiOnly()
+  router.resource('comments', '#controllers/comments_controller').apiOnly()
+}).prefix('api/v1').middleware([middleware.auth({ guards: ['api'] })])
+```
+
+### Testing Authentication
+
+```typescript
+// tests/functional/auth.spec.ts
+import { test } from '@japa/runner'
+import User from '#models/user'
+
+test.group('Authentication', () => {
+  test('should login with valid credentials', async ({ client, assert }) => {
+    const user = await User.create({
+      email: 'test@example.com',
+      password: 'password123',
+      fullName: 'Test User',
+      role: 'user'
+    })
+
+    const response = await client.post('/auth/login').json({
+      email: 'test@example.com',
+      password: 'password123'
+    })
+
+    response.assertStatus(200)
+    response.assertBodyContains({
+      message: 'Login successful',
+      user: {
+        email: 'test@example.com'
+      }
+    })
+  })
+
+  test('should reject invalid credentials', async ({ client }) => {
+    const response = await client.post('/auth/login').json({
+      email: 'test@example.com',
+      password: 'wrong-password'
+    })
+
+    response.assertStatus(401)
+    response.assertBodyContains({
+      error: 'Invalid credentials'
+    })
+  })
+
+  test('should access protected route with token', async ({ client }) => {
+    const user = await User.create({
+      email: 'test@example.com',
+      password: 'password123',
+      fullName: 'Test User',
+      role: 'user'
+    })
+
+    const token = await User.accessTokens.create(user)
+
+    const response = await client.get('/api/auth/me')
+      .header('Authorization', `Bearer ${token.value!.release()}`)
+
+    response.assertStatus(200)
+    response.assertBodyContains({
+      user: {
+        email: 'test@example.com'
+      }
+    })
+  })
+})
+```
+
+### Authentication Best Practices
+
+#### DO's
+
+- ALWAYS hash passwords using the built-in hash service
+- ALWAYS validate credentials before creating sessions/tokens
+- ALWAYS use HTTPS in production for session-based auth
+- ALWAYS set appropriate token expiration times
+- ALWAYS implement rate limiting on auth endpoints
+- ALWAYS use secure session configuration
+- ALWAYS validate and sanitize user input
+
+#### DON'Ts
+
+```typescript
+// ❌ Incorrect: Plain text password storage
+user.password = plainPassword
+
+// ❌ Incorrect: Revealing user existence
+if (!user) {
+  return response.notFound({ error: 'User not found' })
+}
+
+// ❌ Incorrect: Not using auth middleware
+router.get('profile', '#controllers/users_controller.profile') // No auth
+
+// ❌ Incorrect: Exposing sensitive data
+return response.json({ user }) // Includes password hash
+
+// ❌ Incorrect: Weak password requirements
+password: vine.string().minLength(4) // Too weak
+```
+
+### Sources
+
+- [Authentication Documentation](https://docs.adonisjs.com/guides/authentication)
+- [Session Guard](https://docs.adonisjs.com/guides/authentication#session-guard)
+- [Access Tokens Guard](https://docs.adonisjs.com/guides/authentication#access-tokens-guard)
+- [Authorization Patterns](https://docs.adonisjs.com/guides/authorization)
+````
+### adonisjs:commands
+Guidelines for CLI command development in AdonisJS 6
+````mdx
+## CLI Command Development
+
+### Creating Commands
+
+Commands MUST be created using the Ace CLI and placed in `app/commands/`:
+
+```bash
+# Create a new command
+node ace make:command CreateUser
+```
+
+### Command Structure
+
+```typescript
+// app/commands/create_user.ts
+import { BaseCommand, args, flags } from '@adonisjs/core/ace'
+import type { CommandOptions } from '@adonisjs/core/types/ace'
+import User from '#models/user'
+import hash from '@adonisjs/core/services/hash'
+
+export default class CreateUser extends BaseCommand {
+  static commandName = 'user:create'
+  static description = 'Create a new user account'
+
+  // ✅ Define command arguments
+  @args.string({ description: 'User email address' })
+  declare email: string
+
+  @args.string({ description: 'User full name' })
+  declare fullName: string
+
+  // ✅ Define command flags
+  @flags.string({ 
+    description: 'User password (will prompt if not provided)',
+    alias: 'p' 
+  })
+  declare password?: string
+
+  @flags.string({ 
+    description: 'User role',
+    default: 'user'
+  })
+  declare role: string
+
+  @flags.boolean({ 
+    description: 'Activate user immediately',
+    default: false 
+  })
+  declare active: boolean
+
+  @flags.boolean({ 
+    description: 'Force creation even if user exists',
+    default: false 
+  })
+  declare force: boolean
+
+  static options: CommandOptions = {
+    startApp: true,
+    allowUnknownFlags: false,
+    staysAlive: false
+  }
+
+  async run(): Promise<void> {
+    const { email, fullName, role, active, force } = this
+
+    try {
+      // ✅ Validation
+      if (!this.isValidEmail(email)) {
+        this.logger.error('Invalid email address provided')
+        this.exitCode = 1
+        return
+      }
+
+      // ✅ Check if user exists
+      const existingUser = await User.findBy('email', email)
+      if (existingUser && !force) {
+        this.logger.error(`User with email ${email} already exists. Use --force to override.`)
+        this.exitCode = 1
+        return
+      }
+
+      // ✅ Get password
+      let password = this.password
+      if (!password) {
+        password = await this.prompt.secure('Enter password')
+      }
+
+      if (password.length < 8) {
+        this.logger.error('Password must be at least 8 characters long')
+        this.exitCode = 1
+        return
+      }
+
+      // ✅ Create or update user
+      let user: User
+
+      if (existingUser && force) {
+        user = existingUser
+        user.merge({
+          fullName,
+          password: await hash.make(password),
+          role,
+          isActive: active
+        })
+        await user.save()
+        this.logger.success(`User ${email} updated successfully`)
+      } else {
+        user = await User.create({
+          email,
+          fullName,
+          password: await hash.make(password),
+          role,
+          isActive: active
+        })
+        this.logger.success(`User ${email} created successfully`)
+      }
+
+      // ✅ Display user information
+      this.logger.info('User details:')
+      const table = this.ui.table()
+      table.head(['Field', 'Value'])
+      table.row(['ID', user.id.toString()])
+      table.row(['Email', user.email])
+      table.row(['Name', user.fullName])
+      table.row(['Role', user.role])
+      table.row(['Active', user.isActive ? 'Yes' : 'No'])
+      table.row(['Created', user.createdAt.toLocaleString()])
+      table.render()
+
+    } catch (error) {
+      this.logger.error(`Failed to create user: ${error.message}`)
+      this.exitCode = 1
+    }
+  }
+
+  private isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+}
+```
+
+### Database Commands
+
+```typescript
+// app/commands/database_seed.ts
+import { BaseCommand, flags } from '@adonisjs/core/ace'
+import type { CommandOptions } from '@adonisjs/core/types/ace'
+import Database from '@adonisjs/lucid/services/db'
+import { UserFactory } from '#factories/user_factory'
+import { PostFactory } from '#factories/post_factory'
+
+export default class DatabaseSeed extends BaseCommand {
+  static commandName = 'db:seed'
+  static description = 'Seed the database with sample data'
+
+  @flags.number({ 
+    description: 'Number of users to create',
+    default: 10 
+  })
+  declare users: number
+
+  @flags.number({ 
+    description: 'Number of posts per user',
+    default: 5 
+  })
+  declare postsPerUser: number
+
+  @flags.boolean({ 
+    description: 'Truncate existing data',
+    default: false 
+  })
+  declare fresh: boolean
+
+  static options: CommandOptions = {
+    startApp: true
+  }
+
+  async run(): Promise<void> {
+    const { users, postsPerUser, fresh } = this
+
+    try {
+      if (fresh) {
+        this.logger.info('Truncating existing data...')
+        await Database.truncate('posts')
+        await Database.truncate('users')
+      }
+
+      this.logger.info(`Creating ${users} users with ${postsPerUser} posts each...`)
+
+      // ✅ Use progress bar for long operations
+      const progressBar = this.ui.progressBar()
+      progressBar.start(users, 0)
+
+      for (let i = 0; i < users; i++) {
+        const user = await UserFactory.create()
+        await PostFactory.merge({ userId: user.id }).createMany(postsPerUser)
+        progressBar.update(i + 1)
+      }
+
+      progressBar.stop()
+
+      // ✅ Display summary
+      const userCount = await Database.from('users').count('* as total').first()
+      const postCount = await Database.from('posts').count('* as total').first()
+
+      this.logger.success('Database seeding completed!')
+      this.logger.info(`Total users: ${userCount?.total}`)
+      this.logger.info(`Total posts: ${postCount?.total}`)
+
+    } catch (error) {
+      this.logger.error(`Seeding failed: ${error.message}`)
+      this.exitCode = 1
+    }
+  }
+}
+```
+
+### Data Import Commands
+
+```typescript
+// app/commands/import_users.ts
+import { BaseCommand, args, flags } from '@adonisjs/core/ace'
+import type { CommandOptions } from '@adonisjs/core/types/ace'
+import fs from 'node:fs/promises'
+import csv from 'csv-parser'
+import { createReadStream } from 'node:fs'
+import User from '#models/user'
+import Database from '@adonisjs/lucid/services/db'
+
+export default class ImportUsers extends BaseCommand {
+  static commandName = 'import:users'
+  static description = 'Import users from CSV file'
+
+  @args.string({ description: 'Path to CSV file' })
+  declare filePath: string
+
+  @flags.number({ 
+    description: 'Batch size for processing',
+    default: 100 
+  })
+  declare batchSize: number
+
+  @flags.boolean({ 
+    description: 'Skip invalid rows',
+    default: true 
+  })
+  declare skipInvalid: boolean
+
+  @flags.boolean({ 
+    description: 'Dry run - validate without importing',
+    default: false 
+  })
+  declare dryRun: boolean
+
+  static options: CommandOptions = {
+    startApp: true
+  }
+
+  async run(): Promise<void> {
+    const { filePath, batchSize, skipInvalid, dryRun } = this
+
+    try {
+      // ✅ Validate file exists
+      await fs.access(filePath)
+
+      this.logger.info(`Reading CSV file: ${filePath}`)
+      
+      const rows: any[] = []
+      const errors: string[] = []
+      let lineNumber = 1
+
+      // ✅ Stream CSV file
+      await new Promise((resolve, reject) => {
+        createReadStream(filePath)
+          .pipe(csv())
+          .on('data', (row) => {
+            lineNumber++
+            const validation = this.validateRow(row, lineNumber)
+            
+            if (validation.valid) {
+              rows.push(validation.data)
+            } else {
+              errors.push(`Line ${lineNumber}: ${validation.error}`)
+              if (!skipInvalid) {
+                reject(new Error(`Validation failed at line ${lineNumber}: ${validation.error}`))
+                return
+              }
+            }
+          })
+          .on('end', resolve)
+          .on('error', reject)
+      })
+
+      // ✅ Display validation results
+      this.logger.info(`Found ${rows.length} valid rows`)
+      if (errors.length > 0) {
+        this.logger.warning(`${errors.length} invalid rows ${skipInvalid ? 'skipped' : 'found'}`)
+        if (this.logger.level <= 3) { // Debug level
+          errors.forEach(error => this.logger.debug(error))
+        }
+      }
+
+      if (dryRun) {
+        this.logger.info('Dry run completed - no data imported')
+        return
+      }
+
+      // ✅ Process in batches
+      const progressBar = this.ui.progressBar()
+      progressBar.start(rows.length, 0)
+
+      let processed = 0
+      let imported = 0
+      let skipped = 0
+
+      for (let i = 0; i < rows.length; i += batchSize) {
+        const batch = rows.slice(i, i + batchSize)
+        
+        const trx = await Database.transaction()
+        
+        try {
+          for (const row of batch) {
+            const existingUser = await User.findBy('email', row.email, { client: trx })
+            
+            if (existingUser) {
+              skipped++
+            } else {
+              await User.create(row, { client: trx })
+              imported++
+            }
+            
+            processed++
+            progressBar.update(processed)
+          }
+          
+          await trx.commit()
+        } catch (error) {
+          await trx.rollback()
+          throw error
+        }
+      }
+
+      progressBar.stop()
+
+      // ✅ Display results
+      this.logger.success('Import completed!')
+      const table = this.ui.table()
+      table.head(['Metric', 'Count'])
+      table.row(['Total processed', processed.toString()])
+      table.row(['Successfully imported', imported.toString()])
+      table.row(['Skipped (existing)', skipped.toString()])
+      table.row(['Errors', errors.length.toString()])
+      table.render()
+
+    } catch (error) {
+      this.logger.error(`Import failed: ${error.message}`)
+      this.exitCode = 1
+    }
+  }
+
+  private validateRow(row: any, lineNumber: number): { valid: boolean; data?: any; error?: string } {
+    const { email, name, role } = row
+
+    if (!email || !email.trim()) {
+      return { valid: false, error: 'Email is required' }
+    }
+
+    if (!this.isValidEmail(email)) {
+      return { valid: false, error: 'Invalid email format' }
+    }
+
+    if (!name || !name.trim()) {
+      return { valid: false, error: 'Name is required' }
+    }
+
+    const validRoles = ['user', 'admin', 'moderator']
+    const userRole = role || 'user'
+    
+    if (!validRoles.includes(userRole)) {
+      return { valid: false, error: `Invalid role: ${userRole}` }
+    }
+
+    return {
+      valid: true,
+      data: {
+        email: email.trim().toLowerCase(),
+        fullName: name.trim(),
+        role: userRole,
+        password: 'temporary123', // Will need to be changed
+        isActive: true
+      }
+    }
+  }
+
+  private isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+}
+```
+
+### System Commands
+
+```typescript
+// app/commands/system_health.ts
+import { BaseCommand, flags } from '@adonisjs/core/ace'
+import type { CommandOptions } from '@adonisjs/core/types/ace'
+import Database from '@adonisjs/lucid/services/db'
+import redis from '@adonisjs/redis/services/main'
+
+export default class SystemHealth extends BaseCommand {
+  static commandName = 'system:health'
+  static description = 'Check system health and dependencies'
+
+  @flags.boolean({ 
+    description: 'Output in JSON format',
+    default: false 
+  })
+  declare json: boolean
+
+  @flags.boolean({ 
+    description: 'Exit with error code if unhealthy',
+    default: false 
+  })
+  declare strict: boolean
+
+  static options: CommandOptions = {
+    startApp: true
+  }
+
+  async run(): Promise<void> {
+    const checks = {
+      database: await this.checkDatabase(),
+      redis: await this.checkRedis(),
+      disk: await this.checkDiskSpace(),
+      memory: await this.checkMemory()
+    }
+
+    const overall = Object.values(checks).every(check => check.status === 'healthy')
+
+    if (this.json) {
+      this.logger.info(JSON.stringify({
+        overall: overall ? 'healthy' : 'unhealthy',
+        checks,
+        timestamp: new Date().toISOString()
+      }, null, 2))
+    } else {
+      this.displayHealthReport(checks, overall)
+    }
+
+    if (this.strict && !overall) {
+      this.exitCode = 1
+    }
+  }
+
+  private async checkDatabase(): Promise<{ status: string; message: string; details?: any }> {
+    try {
+      const start = Date.now()
+      await Database.rawQuery('SELECT 1')
+      const responseTime = Date.now() - start
+
+      return {
+        status: 'healthy',
+        message: `Connected (${responseTime}ms)`,
+        details: { responseTime }
+      }
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        message: error.message
+      }
+    }
+  }
+
+  private async checkRedis(): Promise<{ status: string; message: string; details?: any }> {
+    try {
+      const start = Date.now()
+      await redis.ping()
+      const responseTime = Date.now() - start
+
+      return {
+        status: 'healthy',
+        message: `Connected (${responseTime}ms)`,
+        details: { responseTime }
+      }
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        message: error.message
+      }
+    }
+  }
+
+  private async checkDiskSpace(): Promise<{ status: string; message: string; details?: any }> {
+    try {
+      const fs = await import('node:fs/promises')
+      const stats = await fs.statfs('.')
+      
+      const total = stats.blocks * stats.bsize
+      const free = stats.bavail * stats.bsize
+      const used = total - free
+      const usedPercent = (used / total) * 100
+
+      const status = usedPercent > 90 ? 'unhealthy' : 'healthy'
+      const message = `${usedPercent.toFixed(1)}% used`
+
+      return {
+        status,
+        message,
+        details: {
+          total: this.formatBytes(total),
+          used: this.formatBytes(used),
+          free: this.formatBytes(free),
+          usedPercent: Math.round(usedPercent)
+        }
+      }
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        message: error.message
+      }
+    }
+  }
+
+  private async checkMemory(): Promise<{ status: string; message: string; details?: any }> {
+    const usage = process.memoryUsage()
+    const total = usage.heapTotal
+    const used = usage.heapUsed
+    const usedPercent = (used / total) * 100
+
+    const status = usedPercent > 90 ? 'unhealthy' : 'healthy'
+    const message = `${usedPercent.toFixed(1)}% used`
+
+    return {
+      status,
+      message,
+      details: {
+        heapTotal: this.formatBytes(usage.heapTotal),
+        heapUsed: this.formatBytes(usage.heapUsed),
+        external: this.formatBytes(usage.external),
+        rss: this.formatBytes(usage.rss)
+      }
+    }
+  }
+
+  private displayHealthReport(checks: any, overall: boolean): void {
+    this.logger.info(`System Health: ${overall ? '✅ HEALTHY' : '❌ UNHEALTHY'}`)
+    this.logger.info('')
+
+    const table = this.ui.table()
+    table.head(['Component', 'Status', 'Details'])
+
+    for (const [component, check] of Object.entries(checks)) {
+      const status = check.status === 'healthy' ? '✅ Healthy' : '❌ Unhealthy'
+      table.row([component.charAt(0).toUpperCase() + component.slice(1), status, check.message])
+    }
+
+    table.render()
+  }
+
+  private formatBytes(bytes: number): string {
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    if (bytes === 0) return '0 Bytes'
+    const i = Math.floor(Math.log(bytes) / Math.log(1024))
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
+  }
+}
+```
+
+### Command Registration
+
+Commands are automatically discovered and registered. You can also manually register them:
+
+```typescript
+// start/kernel.ts
+import { Kernel } from '@adonisjs/core/ace'
+
+// ✅ Auto-discovery (default)
+Kernel.defaultImports([
+  () => import('#commands/create_user'),
+  () => import('#commands/import_users'),
+  () => import('#commands/system_health')
+])
+```
+
+### Command Best Practices
+
+#### DO's
+
+```typescript
+// ✅ Use descriptive command names
+static commandName = 'user:create'
+static commandName = 'import:users'
+static commandName = 'system:health'
+
+// ✅ Provide helpful descriptions
+static description = 'Create a new user account with specified role and permissions'
+
+// ✅ Use progress indicators for long operations
+const progressBar = this.ui.progressBar()
+progressBar.start(total, 0)
+
+// ✅ Handle errors gracefully
+try {
+  await operation()
+} catch (error) {
+  this.logger.error(`Operation failed: ${error.message}`)
+  this.exitCode = 1
+}
+
+// ✅ Validate inputs
+if (!this.isValidEmail(email)) {
+  this.logger.error('Invalid email address provided')
+  this.exitCode = 1
+  return
+}
+
+// ✅ Use transactions for database operations
+const trx = await Database.transaction()
+try {
+  // operations
+  await trx.commit()
+} catch (error) {
+  await trx.rollback()
+  throw error
+}
+```
+
+#### DON'Ts
+
+```typescript
+// ❌ Vague command names
+static commandName = 'do-stuff'
+static commandName = 'command1'
+
+// ❌ No error handling
+await riskyOperation() // Can fail silently
+
+// ❌ No progress indication for long operations
+for (let i = 0; i < 10000; i++) {
+  await operation(i) // User has no feedback
+}
+
+// ❌ Not setting exit codes
+if (error) {
+  console.log('Error occurred') // Should set this.exitCode = 1
+}
+```
+
+### Command Testing
+
+```typescript
+// tests/commands/create_user.spec.ts
+import { test } from '@japa/runner'
+import { AceFactory } from '@adonisjs/core/factories/ace'
+
+test.group('CreateUser Command', () => {
+  test('should create user with valid arguments', async ({ assert }) => {
+    const ace = await new AceFactory().make()
+    
+    const command = await ace.exec('user:create', [
+      'test@example.com',
+      'Test User',
+      '--password=password123',
+      '--role=admin'
+    ])
+
+    assert.equal(command.exitCode, 0)
+    assert.isTrue(command.ui.logger.logs.some(log => 
+      log.message.includes('User test@example.com created successfully')
+    ))
+
+    const user = await User.findBy('email', 'test@example.com')
+    assert.exists(user)
+    assert.equal(user?.role, 'admin')
+  })
+
+  test('should fail with invalid email', async ({ assert }) => {
+    const ace = await new AceFactory().make()
+    
+    const command = await ace.exec('user:create', [
+      'invalid-email',
+      'Test User'
+    ])
+
+    assert.equal(command.exitCode, 1)
+    assert.isTrue(command.ui.logger.logs.some(log => 
+      log.message.includes('Invalid email address provided')
+    ))
+  })
+})
+```
+
+### Sources
+
+- [Ace Commands Documentation](https://docs.adonisjs.com/guides/ace-commandline)
+- [Creating Commands](https://docs.adonisjs.com/guides/ace-commandline#creating-commands)
+- [Command Arguments and Flags](https://docs.adonisjs.com/guides/ace-commandline#arguments-and-flags)
+- [Command Testing](https://docs.adonisjs.com/guides/testing#testing-ace-commands)
+````
+### adonisjs:controllers
+Guidelines for controllers and routing patterns in AdonisJS 6
+````mdx
+## Controllers and Routing
+
+### Controller Guidelines
+
+Controllers MUST be placed in `app/controllers/` and follow these patterns:
+
+#### Controller Structure
+
+```typescript
+// app/controllers/users_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import User from '#models/user'
+
+export default class UsersController {
+  // Resource methods following RESTful conventions
+  async index({ response }: HttpContext) {
+    const users = await User.all()
+    return response.json(users)
+  }
+
+  async show({ params, response }: HttpContext) {
+    const user = await User.findOrFail(params.id)
+    return response.json(user)
+  }
+
+  async store({ request, response }: HttpContext) {
+    const data = request.only(['email', 'name', 'password'])
+    const user = await User.create(data)
+    return response.status(201).json(user)
+  }
+
+  async update({ params, request, response }: HttpContext) {
+    const user = await User.findOrFail(params.id)
+    const data = request.only(['email', 'name'])
+    await user.merge(data).save()
+    return response.json(user)
+  }
+
+  async destroy({ params, response }: HttpContext) {
+    const resource = await Resource.findOrFail(params.id)
+    await resource.delete()
+    return response.status(204).send('')
+  }
+}
+```
+
+#### Controller Best Practices
+
+- ALWAYS use TypeScript and type the HttpContext destructured parameters
+- ALWAYS use dependency injection via `@inject()` decorator for services
+- NEVER put business logic directly in controllers - use services
+- ALWAYS return consistent response formats
+- RELY on AdonisJS global error handling - avoid unnecessary try-catch blocks
+- ALWAYS validate input data using validators
+- NEVER access request body directly without validation
+
+### Route Organization
+
+Routes MUST be defined in `start/routes.ts` following these patterns:
+
+#### Basic Routing
+
+```typescript
+// start/routes.ts
+import router from '@adonisjs/core/services/router'
+import { middleware } from './kernel.js'
+
+// ✅ Correct: Use magic strings for lazy loading
+router.get('users', '#controllers/users_controller.index')
+router.post('users', '#controllers/users_controller.store')
+
+// ✅ Alternative: Direct import (not lazy loaded)
+import UsersController from '#controllers/users_controller'
+router.get('users', [UsersController, 'index'])
+```
+
+#### Resource Routes
+
+```typescript
+// ✅ Correct: Full resource routes
+router.resource('users', '#controllers/users_controller')
+
+// ✅ Correct: API-only resource routes (no create/edit forms)
+router.resource('users', '#controllers/users_controller').apiOnly()
+
+// ✅ Correct: Specific resource methods only
+router.resource('users', '#controllers/users_controller').only(['index', 'show', 'store'])
+
+// ✅ Correct: Nested resources
+router.resource('users.posts', '#controllers/posts_controller')
+```
+
+#### Route Groups
+
+```typescript
+// ✅ Correct: API versioning with groups
+router.group(() => {
+  router.resource('entities', '#controllers/entities_controller').apiOnly()
+  router.resource('items', '#controllers/items_controller').apiOnly()
+  router.resource('categories', '#controllers/categories_controller').apiOnly()
+}).prefix('api/v1').middleware([middleware.auth()])
+
+// ✅ Correct: Admin routes with multiple middleware
+router.group(() => {
+  router.get('dashboard', '#controllers/admin/dashboard_controller.index')
+  router.resource('entities', '#controllers/admin/entities_controller')
+}).prefix('admin').middleware([middleware.auth(), middleware.admin()])
+
+// ✅ Correct: Public routes
+router.group(() => {
+  router.post('login', '#controllers/auth_controller.login')
+  router.post('register', '#controllers/auth_controller.register')
+  router.post('forgot-password', '#controllers/auth_controller.forgotPassword')
+}).prefix('auth')
+```
+
+#### Route Parameters
+
+```typescript
+// ✅ Correct: Route parameters with validation
+router.get('resources/:id', '#controllers/resources_controller.show')
+  .where('id', router.matchers.number())
+
+// ✅ Correct: Optional parameters
+router.get('items/:slug?', '#controllers/items_controller.show')
+
+// ✅ Correct: Wildcard parameters
+router.get('files/*', '#controllers/files_controller.serve')
+
+// ✅ Correct: Multiple parameters
+router.get('entities/:entityId/items/:itemId', '#controllers/items_controller.show')
+  .where('entityId', router.matchers.number())
+  .where('itemId', router.matchers.number())
+```
+
+#### Route Middleware
+
+```typescript
+// ✅ Correct: Global middleware on routes
+router.get('profile', '#controllers/resources_controller.profile')
+  .middleware([middleware.auth()])
+
+// ✅ Correct: Multiple middleware with options
+router.post('admin/resources', '#controllers/admin/resources_controller.store')
+  .middleware([
+    middleware.auth(),
+    middleware.role(['admin', 'moderator'])
+  ])
+
+// ✅ Correct: Route-specific middleware
+router.get('api/resources', '#controllers/api/resources_controller.index')
+  .middleware([middleware.throttle({ max: 100, duration: '1m' })])
+```
+
+### HttpContext Usage
+
+ALWAYS destructure only the properties you need from HttpContext:
+
+```typescript
+// ✅ Correct: Destructure only needed properties
+async store({ request, response, auth }: HttpContext) {
+  const entity = auth.getUserOrFail()
+  const data = request.only(['field1', 'field2'])
+  // ...
+}
+
+// ❌ Incorrect: Using entire context
+async store(ctx: HttpContext) {
+  const entity = ctx.auth.getUserOrFail()
+  const data = ctx.request.only(['field1', 'field2'])
+  // ...
+}
+```
+
+### Response Patterns
+
+ALWAYS return consistent response formats:
+
+```typescript
+export default class ResourcesController {
+  // ✅ Correct: Consistent success responses
+  async index({ response }: HttpContext) {
+    const resources = await Resource.all()
+    return response.json({
+      data: resources,
+      meta: {
+        total: resources.length
+      }
+    })
+  }
+
+  // ✅ Correct: Let AdonisJS handle errors globally
+  async show({ params, response }: HttpContext) {
+    const resource = await Resource.findOrFail(params.id) // Throws 404 automatically
+    return response.json({ data: resource })
+  }
+
+  // ✅ Correct: Status codes for different operations
+  async store({ request, response }: HttpContext) {
+    const resource = await Resource.create(request.only(['field1', 'field2']))
+    return response.status(201).json({ data: resource })
+  }
+
+  async destroy({ params, response }: HttpContext) {
+    const resource = await Resource.findOrFail(params.id)
+    await resource.delete()
+    return response.status(204).send('')
+  }
+}
+```
+
+### Route Testing
+
+```typescript
+// tests/functional/resources.spec.ts
+import { test } from '@japa/runner'
+
+test.group('Resources Controller', () => {
+  test('should list all resources', async ({ client }) => {
+    const response = await client.get('/api/resources')
+    
+    response.assertStatus(200)
+    response.assertBodyContains({
+      data: []
+    })
+  })
+
+  test('should create a new resource', async ({ client }) => {
+    const resourceData = {
+      field1: 'value1',
+      field2: 'value2'
+    }
+
+    const response = await client.post('/api/resources').json(resourceData)
+    
+    response.assertStatus(201)
+    response.assertBodyContains({
+      data: {
+        field1: resourceData.field1,
+        field2: resourceData.field2
+      }
+    })
+  })
+})
+```
+
+### Common Anti-Patterns
+
+```typescript
+// ❌ Incorrect: Business logic in controller
+async store({ request, response }: HttpContext) {
+  const field1 = request.input('field1')
+  
+  // ❌ Don't put validation logic here
+  if (!field1 || field1.length < 3) {
+    return response.status(400).json({ error: 'Invalid field1' })
+  }
+  
+  // ❌ Don't put complex business logic here
+  const existingResource = await Resource.findBy('field1', field1)
+  if (existingResource) {
+    return response.status(409).json({ error: 'Resource exists' })
+  }
+  
+  const resource = await Resource.create(request.all())
+  return response.json(resource)
+}
+
+// ✅ Correct: Delegate to service
+async store({ request, response }: HttpContext) {
+  const data = await request.validateUsing(CreateResourceValidator)
+  const resource = await this.resourceService.createResource(data)
+  return response.status(201).json({ data: resource })
+}
+```
+
+### Sources
+
+- [Controllers Documentation](https://docs.adonisjs.com/guides/controllers)
+- [Routing Documentation](https://docs.adonisjs.com/guides/routing)
+- [HTTP Context](https://docs.adonisjs.com/guides/context)
+- [Resource Routes](https://docs.adonisjs.com/guides/routing#resource-routes)
+- [Route Groups](https://docs.adonisjs.com/guides/routing#route-groups)
+- [Route Middleware](https://docs.adonisjs.com/guides/routing#route-middleware)
+- [Dependency Injection](https://docs.adonisjs.com/guides/dependency-injection)
+````
+### adonisjs:deployment
+Deployment guidelines and best practices for AdonisJS 6 applications
+````mdx
+## Deployment Guidelines
+
+### Production Environment Setup
+
+#### Environment Configuration
+
+```env
+# Production .env
+NODE_ENV=production
+PORT=3333
+HOST=0.0.0.0
+
+# Application
+APP_KEY=your-32-character-secure-app-key
+LOG_LEVEL=info
+
+# Database
+DB_HOST=your-database-host
+DB_PORT=5432
+DB_USER=your-db-user
+DB_PASSWORD=your-secure-db-password
+DB_DATABASE=your-production-db
+
+# Redis
+REDIS_HOST=your-redis-host
+REDIS_PORT=6379
+REDIS_PASSWORD=your-redis-password
+
+# Security
+SESSION_DRIVER=redis
+CORS_ENABLED=true
+
+# External Services
+SMTP_HOST=your-smtp-host
+SMTP_PORT=587
+SMTP_USERNAME=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+
+# Monitoring
+SENTRY_DSN=your-sentry-dsn
+NEW_RELIC_LICENSE_KEY=your-new-relic-key
+```
+
+#### Production Configuration
+
+```typescript
+// config/app.ts
+import env from '#start/env'
+
+export default {
+  appKey: env.get('APP_KEY'),
+  http: {
+    host: env.get('HOST'),
+    port: env.get('PORT'),
+    // ✅ Trust proxy in production
+    trustProxy: env.get('NODE_ENV') === 'production',
+    cookie: {
+      // ✅ Secure cookies in production
+      secure: env.get('NODE_ENV') === 'production',
+      sameSite: 'strict',
+      httpOnly: true
+    }
+  },
+  
+  // ✅ Disable debug in production
+  debug: env.get('NODE_ENV') !== 'production',
+  
+  // ✅ Production optimizations
+  profiler: {
+    enabled: env.get('NODE_ENV') === 'development'
+  }
+}
+```
+
+### Docker Deployment
+
+#### Dockerfile
+
+```dockerfile
+# Dockerfile
+FROM node:18-alpine AS base
+
+# Install dependencies only when needed
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# Copy package files
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
+RUN \
+  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+  elif [ -f package-lock.json ]; then npm ci; \
+  elif [ -f pnpm-lock.yaml ]; then yarn global add pnpm && pnpm i --frozen-lockfile; \
+  else echo "Lockfile not found." && exit 1; \
+  fi
+
+# Build the application
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Build application
+RUN npm run build
+
+# Production image
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Create app user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 adonisjs
+
+# Copy built application
+COPY --from=builder --chown=adonisjs:nodejs /app/build ./
+COPY --from=builder --chown=adonisjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=adonisjs:nodejs /app/package.json ./package.json
+
+USER adonisjs
+
+EXPOSE 3333
+
+ENV PORT=3333
+ENV HOST=0.0.0.0
+
+CMD ["node", "bin/server.js"]
+```
+
+#### Docker Compose
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3333:3333"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:password@db:5432/myapp
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: myapp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+### Nginx Configuration
+
+```nginx
+# nginx.conf
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream app {
+        server app:3333;
+    }
+
+    # Rate limiting
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+
+    server {
+        listen 80;
+        server_name yourdomain.com www.yourdomain.com;
+        
+        # Redirect HTTP to HTTPS
+        return 301 https://$server_name$request_uri;
+    }
+
+    server {
+        listen 443 ssl http2;
+        server_name yourdomain.com www.yourdomain.com;
+
+        # SSL Configuration
+        ssl_certificate /etc/nginx/ssl/cert.pem;
+        ssl_certificate_key /etc/nginx/ssl/key.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;
+        ssl_prefer_server_ciphers off;
+
+        # Security headers
+        add_header X-Frame-Options DENY;
+        add_header X-Content-Type-Options nosniff;
+        add_header X-XSS-Protection "1; mode=block";
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+        # Gzip compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_types
+            application/atom+xml
+            application/javascript
+            application/json
+            application/ld+json
+            application/manifest+json
+            application/rss+xml
+            application/vnd.geo+json
+            application/vnd.ms-fontobject
+            application/x-font-ttf
+            application/x-web-app-manifest+json
+            application/xhtml+xml
+            application/xml
+            font/opentype
+            image/bmp
+            image/svg+xml
+            image/x-icon
+            text/cache-manifest
+            text/css
+            text/plain
+            text/vcard
+            text/vnd.rim.location.xloc
+            text/vtt
+            text/x-component
+            text/x-cross-domain-policy;
+
+        # Static files
+        location /static/ {
+            alias /app/public/;
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+
+        # API rate limiting
+        location /api/ {
+            limit_req zone=api burst=20 nodelay;
+            proxy_pass http://app;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # Login rate limiting
+        location /auth/login {
+            limit_req zone=login burst=5 nodelay;
+            proxy_pass http://app;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # Default proxy
+        location / {
+            proxy_pass http://app;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # WebSocket support
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+    }
+}
+```
+
+### CI/CD Pipeline
+
+#### GitHub Actions
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run type checking
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_DATABASE: test_db
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Build application
+        run: npm run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            cd /app
+            docker compose pull
+            docker compose up -d
+            docker system prune -f
+```
+
+### Health Checks
+
+```typescript
+// app/controllers/health_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import Database from '@adonisjs/lucid/services/db'
+import redis from '@adonisjs/redis/services/main'
+
+export default class HealthController {
+  // ✅ Basic health check
+  async index({ response }: HttpContext) {
+    return response.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      version: process.env.npm_package_version || '1.0.0'
+    })
+  }
+
+  // ✅ Detailed health check
+  async detailed({ response }: HttpContext) {
+    const checks = await Promise.allSettled([
+      this.checkDatabase(),
+      this.checkRedis(),
+      this.checkMemory(),
+      this.checkDisk()
+    ])
+
+    const results = {
+      database: checks[0].status === 'fulfilled' ? checks[0].value : { status: 'error', error: checks[0].reason?.message },
+      redis: checks[1].status === 'fulfilled' ? checks[1].value : { status: 'error', error: checks[1].reason?.message },
+      memory: checks[2].status === 'fulfilled' ? checks[2].value : { status: 'error', error: checks[2].reason?.message },
+      disk: checks[3].status === 'fulfilled' ? checks[3].value : { status: 'error', error: checks[3].reason?.message }
+    }
+
+    const overall = Object.values(results).every(check => check.status === 'ok')
+
+    return response
+      .status(overall ? 200 : 503)
+      .json({
+        status: overall ? 'ok' : 'error',
+        checks: results,
+        timestamp: new Date().toISOString()
+      })
+  }
+
+  private async checkDatabase() {
+    const start = Date.now()
+    await Database.rawQuery('SELECT 1')
+    const responseTime = Date.now() - start
+
+    return {
+      status: 'ok',
+      responseTime,
+      message: `Database connected (${responseTime}ms)`
+    }
+  }
+
+  private async checkRedis() {
+    const start = Date.now()
+    await redis.ping()
+    const responseTime = Date.now() - start
+
+    return {
+      status: 'ok',
+      responseTime,
+      message: `Redis connected (${responseTime}ms)`
+    }
+  }
+
+  private async checkMemory() {
+    const usage = process.memoryUsage()
+    const usedMB = Math.round(usage.heapUsed / 1024 / 1024)
+    const totalMB = Math.round(usage.heapTotal / 1024 / 1024)
+
+    return {
+      status: 'ok',
+      memory: {
+        used: `${usedMB}MB`,
+        total: `${totalMB}MB`,
+        percentage: Math.round((usage.heapUsed / usage.heapTotal) * 100)
+      }
+    }
+  }
+
+  private async checkDisk() {
+    // Simplified disk check
+    return {
+      status: 'ok',
+      message: 'Disk space available'
+    }
+  }
+}
+```
+
+### Database Migrations in Production
+
+```typescript
+// database/migrations/production_deployment.ts
+import { BaseSchema } from '@adonisjs/lucid/schema'
+
+export default class extends BaseSchema {
+  protected tableName = 'users'
+
+  async up() {
+    // ✅ Safe migrations for production
+    this.schema.alterTable(this.tableName, (table) => {
+      // Add columns with defaults
+      table.boolean('email_verified').defaultTo(false)
+      table.timestamp('last_login_at').nullable()
+      
+      // Create indexes
+      table.index(['email'], 'users_email_index')
+      table.index(['created_at'], 'users_created_at_index')
+    })
+  }
+
+  async down() {
+    this.schema.alterTable(this.tableName, (table) => {
+      table.dropIndex(['email'], 'users_email_index')
+      table.dropIndex(['created_at'], 'users_created_at_index')
+      table.dropColumn('email_verified')
+      table.dropColumn('last_login_at')
+    })
+  }
+}
+```
+
+### Monitoring and Logging
+
+```typescript
+// config/logger.ts
+import env from '#start/env'
+
+export default {
+  default: 'app',
+
+  loggers: {
+    app: {
+      enabled: true,
+      name: env.get('APP_NAME'),
+      level: env.get('LOG_LEVEL'),
+      redact: {
+        paths: ['password', 'password_confirmation', 'token', 'secret'],
+        censor: '***'
+      },
+      
+      // ✅ Production logging
+      targets: env.get('NODE_ENV') === 'production' ? [
+        {
+          target: 'pino/file',
+          options: {
+            destination: './storage/logs/app.log'
+          },
+          level: 'info'
+        },
+        {
+          target: '@sentry/node',
+          options: {
+            dsn: env.get('SENTRY_DSN')
+          },
+          level: 'error'
+        }
+      ] : [
+        {
+          target: 'pino-pretty',
+          options: {
+            colorize: true
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+### Performance Monitoring
+
+```typescript
+// app/middleware/performance_monitoring_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import logger from '@adonisjs/core/services/logger'
+
+export default class PerformanceMonitoringMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    const start = process.hrtime.bigint()
+    const startMemory = process.memoryUsage().heapUsed
+
+    try {
+      await next()
+    } finally {
+      const end = process.hrtime.bigint()
+      const endMemory = process.memoryUsage().heapUsed
+      
+      const duration = Number(end - start) / 1000000 // Convert to milliseconds
+      const memoryDelta = endMemory - startMemory
+
+      // ✅ Log performance metrics
+      if (duration > 1000) { // Log slow requests
+        logger.warn('Slow request detected', {
+          method: ctx.request.method(),
+          url: ctx.request.url(),
+          duration: `${duration.toFixed(2)}ms`,
+          memoryDelta: `${(memoryDelta / 1024 / 1024).toFixed(2)}MB`,
+          statusCode: ctx.response.getStatus(),
+          userId: ctx.auth?.user?.id
+        })
+      }
+
+      // ✅ Add performance headers
+      ctx.response.header('X-Response-Time', `${duration.toFixed(2)}ms`)
+    }
+  }
+}
+```
+
+### Deployment Checklist
+
+#### Pre-deployment
+
+- [ ] Environment variables are properly configured
+- [ ] Database migrations have been tested
+- [ ] Application builds successfully
+- [ ] All tests pass
+- [ ] Security headers are configured
+- [ ] SSL certificates are valid
+- [ ] Backup strategy is in place
+- [ ] Monitoring is configured
+
+#### Deployment
+
+- [ ] Deploy to staging environment first
+- [ ] Run database migrations
+- [ ] Verify health checks pass
+- [ ] Test critical user journeys
+- [ ] Monitor error rates and performance
+- [ ] Verify all external integrations work
+
+#### Post-deployment
+
+- [ ] Monitor application logs
+- [ ] Check performance metrics
+- [ ] Verify database connections
+- [ ] Test API endpoints
+- [ ] Monitor error tracking
+- [ ] Verify backup systems
+
+### Rollback Strategy
+
+```bash
+#!/bin/bash
+# rollback.sh
+
+# ✅ Rollback script
+set -e
+
+PREVIOUS_VERSION=$1
+
+if [ -z "$PREVIOUS_VERSION" ]; then
+  echo "Usage: $0 <previous_version>"
+  exit 1
+fi
+
+echo "Rolling back to version: $PREVIOUS_VERSION"
+
+# Stop current application
+docker compose down
+
+# Restore previous image
+docker tag myapp:$PREVIOUS_VERSION myapp:latest
+
+# Rollback database if needed
+# node ace migration:rollback --batch=1
+
+# Start application
+docker compose up -d
+
+# Verify rollback
+sleep 10
+curl -f http://localhost:3333/health || {
+  echo "Health check failed after rollback"
+  exit 1
+}
+
+echo "Rollback completed successfully"
+```
+
+### Scaling Considerations
+
+```yaml
+# docker-compose.scale.yml
+version: '3.8'
+
+services:
+  app:
+    build: .
+    deploy:
+      replicas: 3
+    ports:
+      - "3333-3335:3333"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - db
+      - redis
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-load-balancer.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - app
+```
+
+### Sources
+
+- [AdonisJS Deployment Guide](https://docs.adonisjs.com/guides/deployment)
+- [Docker Best Practices](https://docs.docker.com/develop/dev-best-practices/)
+- [Nginx Configuration](https://nginx.org/en/docs/)
+- [GitHub Actions](https://docs.github.com/en/actions)
+````
+### adonisjs:env
+Guidelines for environment variables and configuration in AdonisJS 6
+````mdx
+## Environment Variables and Configuration
+
+### Environment Validation
+
+Environment variables MUST be validated in `start/env.ts`:
+
+```typescript
+// start/env.ts
+import { Env } from '@adonisjs/core/env'
+
+export default await Env.create(new URL('../', import.meta.url), {
+  // ✅ App configuration
+  NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
+  PORT: Env.schema.number(),
+  APP_KEY: Env.schema.string(),
+  HOST: Env.schema.string({ format: 'host' }),
+  LOG_LEVEL: Env.schema.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']),
+
+  // ✅ Database configuration
+  DB_HOST: Env.schema.string({ format: 'host' }),
+  DB_PORT: Env.schema.number(),
+  DB_USER: Env.schema.string(),
+  DB_PASSWORD: Env.schema.string.optional(),
+  DB_DATABASE: Env.schema.string(),
+
+  // ✅ Redis configuration
+  REDIS_HOST: Env.schema.string({ format: 'host' }),
+  REDIS_PORT: Env.schema.number(),
+  REDIS_PASSWORD: Env.schema.string.optional(),
+
+  // ✅ Email configuration
+  SMTP_HOST: Env.schema.string({ format: 'host' }),
+  SMTP_PORT: Env.schema.number(),
+  SMTP_USERNAME: Env.schema.string.optional(),
+  SMTP_PASSWORD: Env.schema.string.optional(),
+
+  // ✅ Third-party services
+  AWS_ACCESS_KEY_ID: Env.schema.string.optional(),
+  AWS_SECRET_ACCESS_KEY: Env.schema.string.optional(),
+  AWS_BUCKET: Env.schema.string.optional(),
+  AWS_REGION: Env.schema.string.optional(),
+
+  // ✅ Social authentication
+  GITHUB_CLIENT_ID: Env.schema.string.optional(),
+  GITHUB_CLIENT_SECRET: Env.schema.string.optional(),
+  GOOGLE_CLIENT_ID: Env.schema.string.optional(),
+  GOOGLE_CLIENT_SECRET: Env.schema.string.optional(),
+
+  // ✅ API keys
+  STRIPE_SECRET_KEY: Env.schema.string.optional(),
+  STRIPE_PUBLISHABLE_KEY: Env.schema.string.optional(),
+  SENDGRID_API_KEY: Env.schema.string.optional(),
+
+  // ✅ Feature flags
+  ENABLE_DEBUG_MODE: Env.schema.boolean.optional(),
+  ENABLE_ANALYTICS: Env.schema.boolean.optional(),
+  MAINTENANCE_MODE: Env.schema.boolean.optional(),
+
+  // ✅ Security settings
+  SESSION_DRIVER: Env.schema.enum(['cookie', 'memory', 'redis'] as const),
+  CORS_ENABLED: Env.schema.boolean(),
+  RATE_LIMIT_ENABLED: Env.schema.boolean.optional(),
+})
+```
+
+### Environment File Structure
+
+#### .env (Development)
+
+```env
+# ✅ Application
+NODE_ENV=development
+PORT=3333
+APP_KEY=your-32-character-secret-key
+HOST=localhost
+LOG_LEVEL=debug
+
+# ✅ Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=password
+DB_DATABASE=myapp_development
+
+# ✅ Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+# REDIS_PASSWORD=
+
+# ✅ Email (Development)
+SMTP_HOST=localhost
+SMTP_PORT=1025
+# SMTP_USERNAME=
+# SMTP_PASSWORD=
+
+# ✅ Development flags
+ENABLE_DEBUG_MODE=true
+ENABLE_ANALYTICS=false
+MAINTENANCE_MODE=false
+
+# ✅ Session
+SESSION_DRIVER=cookie
+CORS_ENABLED=true
+```
+
+#### .env.example (Template)
+
+```env
+# Application Configuration
+NODE_ENV=development
+PORT=3333
+APP_KEY=
+HOST=localhost
+LOG_LEVEL=info
+
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=
+DB_PASSWORD=
+DB_DATABASE=
+
+# Redis Configuration (Optional)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# Email Configuration
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+
+# AWS S3 Configuration (Optional)
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_BUCKET=
+AWS_REGION=us-east-1
+
+# Third-party API Keys (Optional)
+STRIPE_SECRET_KEY=
+STRIPE_PUBLISHABLE_KEY=
+SENDGRID_API_KEY=
+
+# Social Authentication (Optional)
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# Feature Flags
+ENABLE_DEBUG_MODE=false
+ENABLE_ANALYTICS=true
+MAINTENANCE_MODE=false
+
+# Security
+SESSION_DRIVER=cookie
+CORS_ENABLED=true
+RATE_LIMIT_ENABLED=true
+```
+
+### Configuration Files
+
+Configuration files MUST use environment variables:
+
+```typescript
+// config/app.ts
+import env from '#start/env'
+
+export default {
+  // ✅ App settings
+  appKey: env.get('APP_KEY'),
+  http: {
+    host: env.get('HOST'),
+    port: env.get('PORT'),
+    trustProxy: env.get('NODE_ENV') === 'production'
+  },
+
+  // ✅ Debug settings
+  debug: env.get('ENABLE_DEBUG_MODE', false),
+  
+  // ✅ Feature flags
+  features: {
+    analytics: env.get('ENABLE_ANALYTICS', true),
+    maintenanceMode: env.get('MAINTENANCE_MODE', false)
+  }
+}
+```
+
+```typescript
+// config/database.ts
+import env from '#start/env'
+
+export default {
+  connection: env.get('DB_CONNECTION', 'pg'),
+  
+  connections: {
+    pg: {
+      client: 'pg',
+      connection: {
+        host: env.get('DB_HOST'),
+        port: env.get('DB_PORT'),
+        user: env.get('DB_USER'),
+        password: env.get('DB_PASSWORD'),
+        database: env.get('DB_DATABASE'),
+      },
+      migrations: {
+        naturalSort: true,
+        paths: ['./database/migrations']
+      },
+      debug: env.get('NODE_ENV') === 'development'
+    }
+  }
+}
+```
+
+```typescript
+// config/redis.ts
+import env from '#start/env'
+
+export default {
+  connection: 'main',
+  
+  connections: {
+    main: {
+      host: env.get('REDIS_HOST'),
+      port: env.get('REDIS_PORT'),
+      password: env.get('REDIS_PASSWORD', ''),
+      db: 0,
+      keyPrefix: ''
+    }
+  }
+}
+```
+
+### Using Environment Variables
+
+```typescript
+// ✅ In services
+import env from '#start/env'
+
+export default class EmailService {
+  private config = {
+    host: env.get('SMTP_HOST'),
+    port: env.get('SMTP_PORT'),
+    username: env.get('SMTP_USERNAME'),
+    password: env.get('SMTP_PASSWORD')
+  }
+
+  async sendEmail(to: string, subject: string, body: string) {
+    if (!this.config.host) {
+      throw new Error('SMTP configuration is missing')
+    }
+    // Send email logic
+  }
+}
+
+// ✅ In controllers with feature flags
+import env from '#start/env'
+
+export default class AnalyticsController {
+  async track({ request, response }: HttpContext) {
+    if (!env.get('ENABLE_ANALYTICS')) {
+      return response.noContent()
+    }
+
+    // Track analytics
+    return response.json({ tracked: true })
+  }
+}
+
+// ✅ In middleware
+export default class MaintenanceMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    if (env.get('MAINTENANCE_MODE')) {
+      return ctx.response.status(503).json({
+        error: 'Service temporarily unavailable',
+        message: 'The application is under maintenance'
+      })
+    }
+
+    return await next()
+  }
+}
+```
+
+### Environment-Specific Configuration
+
+```typescript
+// config/cors.ts
+import env from '#start/env'
+
+export default {
+  enabled: env.get('CORS_ENABLED'),
+  
+  // ✅ Different origins per environment
+  origin: env.get('NODE_ENV') === 'production' 
+    ? ['https://yourdomain.com', 'https://app.yourdomain.com']
+    : true,
+    
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'],
+  headers: true,
+  exposeHeaders: [],
+  credentials: true,
+  maxAge: false
+}
+```
+
+```typescript
+// config/session.ts
+import env from '#start/env'
+
+export default {
+  driver: env.get('SESSION_DRIVER'),
+  
+  cookieName: 'adonis-session',
+  clearWithBrowser: false,
+  
+  // ✅ Secure cookies in production
+  cookie: {
+    domain: env.get('NODE_ENV') === 'production' ? '.yourdomain.com' : '',
+    path: '/',
+    maxAge: '2h',
+    httpOnly: true,
+    secure: env.get('NODE_ENV') === 'production',
+    sameSite: false,
+  }
+}
+```
+
+### Environment Variable Best Practices
+
+#### Naming Conventions
+
+```env
+# ✅ Correct: Use SCREAMING_SNAKE_CASE
+DATABASE_URL=postgresql://user:pass@localhost/db
+API_BASE_URL=https://api.example.com
+ENABLE_FEATURE_X=true
+MAX_UPLOAD_SIZE=10485760
+
+# ❌ Incorrect: Mixed case or spaces
+database_url=postgresql://user:pass@localhost/db
+Api-Base-Url=https://api.example.com
+enable feature x=true
+```
+
+#### Sensitive Data Handling
+
+```typescript
+// ✅ Correct: Optional sensitive variables
+AWS_SECRET_ACCESS_KEY: Env.schema.string.optional(),
+STRIPE_SECRET_KEY: Env.schema.string.optional(),
+
+// ✅ Correct: Required in production only
+JWT_SECRET: Env.schema.string.optional({
+  validate: (value) => {
+    if (env.get('NODE_ENV') === 'production' && !value) {
+      throw new Error('JWT_SECRET is required in production')
+    }
+  }
+})
+
+// ✅ Correct: Default values for development
+REDIS_PORT: Env.schema.number.optional(6379),
+LOG_LEVEL: Env.schema.enum(['debug', 'info', 'warn', 'error']).optional('info')
+```
+
+#### Type Safety
+
+```typescript
+// ✅ Correct: Proper validation
+export default class PaymentService {
+  constructor() {
+    if (!env.get('STRIPE_SECRET_KEY')) {
+      throw new Error('Stripe configuration is required')
+    }
+  }
+
+  async processPayment(amount: number) {
+    const stripe = new Stripe(env.get('STRIPE_SECRET_KEY')!, {
+      apiVersion: '2023-10-16'
+    })
+    // Process payment
+  }
+}
+
+// ✅ Correct: Feature flags
+export default class FeatureService {
+  isAnalyticsEnabled(): boolean {
+    return env.get('ENABLE_ANALYTICS', false)
+  }
+
+  isMaintenanceMode(): boolean {
+    return env.get('MAINTENANCE_MODE', false)
+  }
+
+  getMaxUploadSize(): number {
+    return env.get('MAX_UPLOAD_SIZE', 10485760) // 10MB default
+  }
+}
+```
+
+### Testing with Environment Variables
+
+```typescript
+// tests/.env
+NODE_ENV=test
+PORT=3334
+APP_KEY=test-app-key-32-characters-long
+HOST=localhost
+LOG_LEVEL=error
+
+# Test database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=test_user
+DB_PASSWORD=test_password
+DB_DATABASE=myapp_test
+
+# Disable external services in tests
+ENABLE_ANALYTICS=false
+ENABLE_EMAIL=false
+STRIPE_SECRET_KEY=sk_test_fake_key
+```
+
+```typescript
+// tests/unit/services/email_service.spec.ts
+import { test } from '@japa/runner'
+import env from '#start/env'
+
+test.group('Email Service', () => {
+  test('should handle missing SMTP configuration', async ({ assert }) => {
+    // Temporarily override env for test
+    const originalHost = env.get('SMTP_HOST')
+    process.env.SMTP_HOST = ''
+    
+    const emailService = new EmailService()
+    
+    await assert.rejects(
+      () => emailService.sendEmail('test@example.com', 'Test', 'Body'),
+      'SMTP configuration is missing'
+    )
+    
+    // Restore original value
+    process.env.SMTP_HOST = originalHost
+  })
+})
+```
+
+### Common Anti-Patterns
+
+```typescript
+// ❌ Incorrect: Hardcoded values
+const config = {
+  database: {
+    host: 'localhost',
+    port: 5432,
+    user: 'postgres'
+  }
+}
+
+// ❌ Incorrect: Direct process.env access
+const apiKey = process.env.API_KEY
+const port = parseInt(process.env.PORT || '3333')
+
+// ❌ Incorrect: No validation
+const requiredValue = env.get('REQUIRED_VALUE') // Could be undefined
+
+// ❌ Incorrect: Exposing secrets in logs
+console.log('Database config:', {
+  host: env.get('DB_HOST'),
+  password: env.get('DB_PASSWORD') // Don't log passwords!
+})
+
+// ✅ Correct: Safe logging
+console.log('Database config:', {
+  host: env.get('DB_HOST'),
+  password: env.get('DB_PASSWORD') ? '***' : undefined
+})
+```
+
+### Environment Variable Documentation
+
+Always document environment variables in your README.md:
+
+```markdown
+## Environment Variables
+
+### Required
+
+- `APP_KEY`: 32-character application encryption key
+- `DB_HOST`: Database server hostname
+- `DB_PORT`: Database server port
+- `DB_USER`: Database username
+- `DB_PASSWORD`: Database password
+- `DB_DATABASE`: Database name
+
+### Optional
+
+- `REDIS_HOST`: Redis server hostname (default: localhost)
+- `REDIS_PORT`: Redis server port (default: 6379)
+- `ENABLE_ANALYTICS`: Enable analytics tracking (default: true)
+- `LOG_LEVEL`: Application log level (default: info)
+
+### Development Only
+
+- `ENABLE_DEBUG_MODE`: Enable debug mode (default: false)
+- `SMTP_HOST`: SMTP server for local email testing
+```
+
+### Sources
+
+- [Environment Variables](https://docs.adonisjs.com/guides/environment-variables)
+- [Configuration](https://docs.adonisjs.com/guides/configuration)
+- [Validation](https://docs.adonisjs.com/guides/environment-variables#validation)
+````
+### adonisjs:errors
+Error handling patterns and exception management in AdonisJS 6
+````mdx
+## Error Handling
+
+### Custom Exceptions
+
+Create custom exceptions in `app/exceptions/` for specific error scenarios:
+
+```typescript
+// app/exceptions/user_not_found_exception.ts
+import { Exception } from '@adonisjs/core/exceptions'
+import type { HttpContext } from '@adonisjs/core/http'
+
+export default class UserNotFoundException extends Exception {
+  constructor(userId: number | string) {
+    super(`User with ID ${userId} not found`, {
+      status: 404,
+      code: 'USER_NOT_FOUND'
+    })
+  }
+
+  async handle(error: this, ctx: HttpContext) {
+    return ctx.response.status(this.status).json({
+      error: this.message,
+      code: this.code,
+      timestamp: new Date().toISOString()
+    })
+  }
+}
+```
+
+```typescript
+// app/exceptions/validation_exception.ts
+import { Exception } from '@adonisjs/core/exceptions'
+import type { HttpContext } from '@adonisjs/core/http'
+
+export default class ValidationException extends Exception {
+  constructor(
+    message: string,
+    public errors: Record<string, string[]>
+  ) {
+    super(message, {
+      status: 422,
+      code: 'VALIDATION_ERROR'
+    })
+  }
+
+  async handle(error: this, ctx: HttpContext) {
+    return ctx.response.status(this.status).json({
+      error: this.message,
+      code: this.code,
+      errors: this.errors,
+      timestamp: new Date().toISOString()
+    })
+  }
+}
+```
+
+```typescript
+// app/exceptions/business_logic_exception.ts
+import { Exception } from '@adonisjs/core/exceptions'
+import type { HttpContext } from '@adonisjs/core/http'
+
+export default class BusinessLogicException extends Exception {
+  constructor(
+    message: string,
+    public businessCode: string,
+    statusCode: number = 400
+  ) {
+    super(message, {
+      status: statusCode,
+      code: businessCode
+    })
+  }
+
+  async handle(error: this, ctx: HttpContext) {
+    return ctx.response.status(this.status).json({
+      error: this.message,
+      code: this.code,
+      timestamp: new Date().toISOString()
+    })
+  }
+}
+```
+
+### Exception Handler
+
+Configure global exception handling in `app/exceptions/handler.ts`:
+
+```typescript
+// app/exceptions/handler.ts
+import logger from '@adonisjs/core/services/logger'
+import { ExceptionHandler } from '@adonisjs/core/exceptions'
+import type { HttpContext } from '@adonisjs/core/http'
+
+export default class HttpExceptionHandler extends ExceptionHandler {
+  protected debug = !['production', 'staging'].includes(process.env.NODE_ENV || '')
+
+  async handle(error: any, ctx: HttpContext) {
+    // ✅ Handle validation errors
+    if (error.code === 'E_VALIDATION_ERROR') {
+      return ctx.response.status(422).json({
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        messages: error.messages,
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    // ✅ Handle authentication errors
+    if (error.code === 'E_UNAUTHORIZED_ACCESS') {
+      return ctx.response.status(401).json({
+        error: 'Authentication required',
+        code: 'UNAUTHORIZED',
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    // ✅ Handle route not found
+    if (error.code === 'E_ROUTE_NOT_FOUND') {
+      return ctx.response.status(404).json({
+        error: 'Route not found',
+        code: 'ROUTE_NOT_FOUND',
+        path: ctx.request.url(),
+        method: ctx.request.method(),
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    // ✅ Handle database errors
+    if (error.code === '23505') { // Unique constraint violation
+      return ctx.response.status(409).json({
+        error: 'Resource already exists',
+        code: 'DUPLICATE_RESOURCE',
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    // ✅ Handle model not found errors
+    if (error.code === 'E_ROW_NOT_FOUND') {
+      return ctx.response.status(404).json({
+        error: 'Resource not found',
+        code: 'RESOURCE_NOT_FOUND',
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    // ✅ Handle rate limiting errors
+    if (error.code === 'E_TOO_MANY_REQUESTS') {
+      return ctx.response.status(429).json({
+        error: 'Too many requests',
+        code: 'RATE_LIMIT_EXCEEDED',
+        retryAfter: error.retryAfter,
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    return super.handle(error, ctx)
+  }
+
+  async report(error: any, ctx: HttpContext) {
+    // ✅ Log errors with context
+    if (this.shouldReport(error)) {
+      logger.error('Unhandled exception', {
+        error: error.message,
+        stack: error.stack,
+        code: error.code,
+        status: error.status,
+        url: ctx.request.url(),
+        method: ctx.request.method(),
+        userId: ctx.auth?.user?.id,
+        ip: ctx.request.ip(),
+        userAgent: ctx.request.header('user-agent'),
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    return super.report(error, ctx)
+  }
+
+  private shouldReport(error: any): boolean {
+    // ✅ Don't report client errors and validation errors
+    const ignoredCodes = [
+      'E_VALIDATION_ERROR',
+      'E_ROUTE_NOT_FOUND',
+      'E_UNAUTHORIZED_ACCESS',
+      'E_ROW_NOT_FOUND'
+    ]
+
+    return !ignoredCodes.includes(error.code) && error.status >= 500
+  }
+}
+```
+
+### Error Handling in Controllers
+
+```typescript
+// app/controllers/users_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import User from '#models/user'
+import UserService from '#services/user_service'
+import UserNotFoundException from '#exceptions/user_not_found_exception'
+import BusinessLogicException from '#exceptions/business_logic_exception'
+
+export default class UsersController {
+  constructor(private userService: UserService) {}
+
+  // ✅ Let AdonisJS handle exceptions globally
+  async show({ params, response }: HttpContext) {
+    const user = await User.findOrFail(params.id) // Throws 404 automatically
+    return response.json({ data: user })
+  }
+
+  // ✅ Custom exception for business logic
+  async update({ params, request, response }: HttpContext) {
+    const user = await User.findOrFail(params.id)
+    const data = request.only(['email', 'name'])
+    
+    // Throw custom exception when needed
+    if (data.email && !data.email.includes('@')) {
+      throw new ValidationException('Invalid email format')
+    }
+    
+    await user.merge(data).save()
+    return response.json({ data: user })
+  }
+
+  // ✅ Validation with global error handling
+  async store({ request, response }: HttpContext) {
+    const data = await request.validateUsing(createUserValidator)
+    const user = await this.userService.createUser(data)
+    
+    return response.status(201).json({ data: user })
+  }
+}
+```
+
+### Error Handling in Services
+
+```typescript
+// app/services/user_service.ts
+import User from '#models/user'
+import UserNotFoundException from '#exceptions/user_not_found_exception'
+import BusinessLogicException from '#exceptions/business_logic_exception'
+
+export default class UserService {
+  // ✅ Service-level error handling
+  async findUser(id: number): Promise<User> {
+    const user = await User.find(id)
+    
+    if (!user) {
+      throw new UserNotFoundException(id)
+    }
+
+    return user
+  }
+
+  async createUser(data: any): Promise<User> {
+    // Only catch specific database errors that need transformation
+    try {
+      return await User.create(data)
+    } catch (error) {
+      // Transform database constraint errors to business exceptions
+      if (error.code === '23505') {
+        throw new BusinessLogicException(
+          'Resource already exists',
+          'DUPLICATE_ENTRY',
+          409
+        )
+      }
+      throw error
+    }
+  }
+
+  async updateUser(id: number, data: any): Promise<User> {
+    const user = await this.findUser(id) // Will throw if not found
+    
+    try {
+      await user.merge(data).save()
+      return user
+    } catch (error) {
+      if (error.code === '23505') {
+        throw new BusinessLogicException(
+          'Email address is already taken',
+          'EMAIL_ALREADY_EXISTS',
+          409
+        )
+      }
+      
+      throw error
+    }
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    const user = await this.findUser(id)
+    
+    // Business logic check
+    if (user.role === 'admin') {
+      throw new BusinessLogicException(
+        'Admin users cannot be deleted',
+        'ADMIN_DELETION_FORBIDDEN',
+        403
+      )
+    }
+
+    await user.delete()
+  }
+}
+```
+
+### Error Handling Middleware
+
+```typescript
+// app/middleware/error_boundary_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import logger from '@adonisjs/core/services/logger'
+
+export default class ErrorBoundaryMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    try {
+      return await next()
+    } catch (error) {
+      // ✅ Add request context to error
+      error.requestId = ctx.request.header('x-request-id') || this.generateRequestId()
+      error.url = ctx.request.url()
+      error.method = ctx.request.method()
+      error.userId = ctx.auth?.user?.id
+
+      // Re-throw to let the global handler deal with it
+      throw error
+    }
+  }
+
+  private generateRequestId(): string {
+    return Math.random().toString(36).substr(2, 9)
+  }
+}
+```
+
+### API Error Responses
+
+```typescript
+// app/controllers/api/base_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+
+export default class BaseApiController {
+  // ✅ Standardized error responses
+  protected errorResponse(
+    ctx: HttpContext,
+    message: string,
+    code: string,
+    statusCode: number = 400,
+    details?: any
+  ) {
+    return ctx.response.status(statusCode).json({
+      success: false,
+      error: {
+        message,
+        code,
+        details,
+        timestamp: new Date().toISOString(),
+        path: ctx.request.url(),
+        requestId: ctx.request.header('x-request-id')
+      }
+    })
+  }
+
+  // ✅ Standardized success responses
+  protected successResponse(
+    ctx: HttpContext,
+    data: any,
+    message?: string,
+    statusCode: number = 200
+  ) {
+    return ctx.response.status(statusCode).json({
+      success: true,
+      data,
+      message,
+      timestamp: new Date().toISOString()
+    })
+  }
+}
+```
+
+### Async Error Handling
+
+```typescript
+// app/services/external_api_service.ts
+export default class ExternalApiService {
+  // ✅ Handle network and timeout errors
+  async fetchUserData(userId: number): Promise<any> {
+    try {
+      const response = await fetch(`https://api.example.com/users/${userId}`, {
+        timeout: 5000, // 5 second timeout
+        headers: {
+          'Authorization': `Bearer ${process.env.API_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new BusinessLogicException(
+          `External API error: ${response.statusText}`,
+          'EXTERNAL_API_ERROR',
+          response.status
+        )
+      }
+
+      return await response.json()
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new BusinessLogicException(
+          'External API request timed out',
+          'API_TIMEOUT',
+          504
+        )
+      }
+
+      if (error.code === 'ECONNREFUSED') {
+        throw new BusinessLogicException(
+          'External API is unavailable',
+          'API_UNAVAILABLE',
+          503
+        )
+      }
+
+      throw error
+    }
+  }
+
+  // ✅ Retry logic with exponential backoff
+  async fetchWithRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3
+  ): Promise<T> {
+    let lastError: any
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation()
+      } catch (error) {
+        lastError = error
+        
+        // Don't retry client errors (4xx)
+        if (error.status >= 400 && error.status < 500) {
+          throw error
+        }
+
+        if (attempt === maxRetries) {
+          break
+        }
+
+        // Exponential backoff
+        const delay = Math.pow(2, attempt) * 1000
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+
+    throw lastError
+  }
+}
+```
+
+### Database Error Handling
+
+```typescript
+// app/services/database_service.ts
+import Database from '@adonisjs/lucid/services/db'
+
+export default class DatabaseService {
+  // ✅ Transaction error handling
+  async performComplexOperation(data: any) {
+    const trx = await Database.transaction()
+    
+    try {
+      const user = await User.create(data.user, { client: trx })
+      const profile = await Profile.create({
+        ...data.profile,
+        userId: user.id
+      }, { client: trx })
+      
+      await trx.commit()
+      return { user, profile }
+    } catch (error) {
+      await trx.rollback()
+      
+      // Handle specific database errors
+      if (error.code === '23505') {
+        throw new BusinessLogicException(
+          'Duplicate entry detected',
+          'DUPLICATE_ENTRY',
+          409
+        )
+      }
+      
+      if (error.code === '23503') {
+        throw new BusinessLogicException(
+          'Foreign key constraint violation',
+          'INVALID_REFERENCE',
+          400
+        )
+      }
+
+      throw error
+    }
+  }
+
+  // ✅ Connection error handling
+  async checkDatabaseHealth(): Promise<boolean> {
+    try {
+      await Database.rawQuery('SELECT 1')
+      return true
+    } catch (error) {
+      logger.error('Database health check failed', { error: error.message })
+      return false
+    }
+  }
+}
+```
+
+### Error Monitoring
+
+```typescript
+// app/services/error_monitoring_service.ts
+import logger from '@adonisjs/core/services/logger'
+
+export default class ErrorMonitoringService {
+  // ✅ Track error metrics
+  async trackError(error: any, context: Record<string, any> = {}) {
+    const errorData = {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      status: error.status,
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      ...context
+    }
+
+    // Log the error
+    logger.error('Application error', errorData)
+
+    // Send to external monitoring service in production
+    if (process.env.NODE_ENV === 'production') {
+      await this.sendToMonitoringService(errorData)
+    }
+  }
+
+  private async sendToMonitoringService(errorData: any) {
+    try {
+      // Send to Sentry, LogRocket, or other monitoring service
+      // await sentry.captureException(errorData)
+    } catch (monitoringError) {
+      logger.error('Failed to send error to monitoring service', {
+        originalError: errorData,
+        monitoringError: monitoringError.message
+      })
+    }
+  }
+
+  // ✅ Track performance issues
+  async trackSlowOperation(operation: string, duration: number, threshold: number = 1000) {
+    if (duration > threshold) {
+      logger.warn('Slow operation detected', {
+        operation,
+        duration: `${duration}ms`,
+        threshold: `${threshold}ms`,
+        timestamp: new Date().toISOString()
+      })
+    }
+  }
+}
+```
+
+### Error Handling Best Practices
+
+#### DO's
+
+```typescript
+// ✅ Use specific exception types
+throw new UserNotFoundException(userId)
+
+// ✅ Provide meaningful error messages
+throw new BusinessLogicException(
+  'User cannot delete their own account',
+  'SELF_DELETION_FORBIDDEN'
+)
+
+// ✅ Let AdonisJS handle rejections globally
+await someAsyncOperation() // Exceptions bubble up to global handler
+
+// ✅ Only use try-catch when transforming errors
+try {
+  await riskyDatabaseOperation()
+} catch (error) {
+  // Transform specific errors into business exceptions
+  if (error.code === 'SPECIFIC_DB_ERROR') {
+    throw new BusinessLogicException('User-friendly message', 'BUSINESS_CODE')
+  }
+  throw error
+}
+
+// ✅ Use proper HTTP status codes
+return response.status(404).json({ error: 'Resource not found' })
+
+// ✅ Log errors with context
+logger.error('Operation failed', {
+  userId,
+  operation: 'updateProfile',
+  error: error.message
+})
+```
+
+#### DON'Ts
+
+```typescript
+// ❌ Generic error handling
+throw new Error('Something went wrong')
+
+// ❌ Swallowing errors
+try {
+  await riskyOperation()
+} catch {
+  // Ignoring error
+}
+
+// ❌ Exposing sensitive information
+throw new Error(`Database connection failed: ${dbPassword}`)
+
+// ❌ Not using appropriate status codes
+return response.status(200).json({ error: 'Not found' })
+
+// ❌ Synchronous operations that might throw
+const data = JSON.parse(untrustedInput) // Can throw
+```
+
+### Testing Error Handling
+
+```typescript
+// tests/unit/services/user_service.spec.ts
+import { test } from '@japa/runner'
+import UserService from '#services/user_service'
+import UserNotFoundException from '#exceptions/user_not_found_exception'
+
+test.group('User Service Error Handling', () => {
+  test('should throw UserNotFoundException for non-existent user', async ({ assert }) => {
+    const userService = new UserService()
+    
+    await assert.rejects(
+      () => userService.findUser(999),
+      UserNotFoundException
+    )
+  })
+
+  test('should handle duplicate email gracefully', async ({ assert }) => {
+    const userService = new UserService()
+    
+    await UserFactory.create({ email: 'test@example.com' })
+    
+    await assert.rejects(
+      () => userService.createUser({
+        email: 'test@example.com',
+        password: 'password',
+        name: 'Test User'
+      }),
+      'Email address is already registered'
+    )
+  })
+})
+```
+
+### Sources
+
+- [Exception Handling](https://docs.adonisjs.com/guides/exception-handling)
+- [Custom Exceptions](https://docs.adonisjs.com/guides/exception-handling#custom-exceptions)
+- [Error Reporting](https://docs.adonisjs.com/guides/exception-handling#error-reporting)
+- [HTTP Status Codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status)
+````
+### adonisjs:middleware
+Guidelines for middleware usage and creation in AdonisJS 6
+````mdx
+## Middleware
+
+### Middleware Structure
+
+Middleware MUST be placed in `app/middleware/` and follow these patterns:
+
+#### Basic Middleware Structure
+
+```typescript
+// app/middleware/auth_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+export default class AuthMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    // Downstream logic (before route handler)
+    const { auth, response } = ctx
+    
+    try {
+      await auth.check()
+    } catch {
+      return response.unauthorized({ error: 'Unauthorized access' })
+    }
+
+    // Continue to next middleware or route handler
+    const result = await next()
+
+    // Upstream logic (after route handler)
+    // Optional: Modify response or perform cleanup
+    
+    return result
+  }
+}
+```
+
+#### Middleware with Parameters
+
+```typescript
+// app/middleware/role_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+export default class RoleMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: { roles: string[] }
+  ) {
+    const { auth, response } = ctx
+    const user = auth.getUserOrFail()
+
+    if (!options.roles.includes(user.role)) {
+      return response.forbidden({ 
+        error: 'Insufficient permissions',
+        required_roles: options.roles 
+      })
+    }
+
+    return await next()
+  }
+}
+```
+
+### Middleware Registration
+
+Middleware must be registered in `start/kernel.ts`:
+
+```typescript
+// start/kernel.ts
+import router from '@adonisjs/core/services/router'
+import server from '@adonisjs/core/services/server'
+
+// ✅ Correct: Server middleware (runs on every request)
+server.use([
+  () => import('@adonisjs/cors/cors_middleware'),
+  () => import('@adonisjs/static/static_middleware'),
+])
+
+// ✅ Correct: Router middleware (runs on matched routes)
+router.use([
+  () => import('@adonisjs/core/bodyparser_middleware'),
+  () => import('@adonisjs/session/session_middleware'),
+])
+
+// ✅ Correct: Named middleware registration
+export const middleware = router.named({
+  auth: () => import('#middleware/auth_middleware'),
+  guest: () => import('#middleware/guest_middleware'),
+  role: () => import('#middleware/role_middleware'),
+  throttle: () => import('#middleware/throttle_middleware'),
+  cors: () => import('#middleware/cors_middleware'),
+})
+```
+
+### Middleware Usage
+
+```typescript
+// start/routes.ts
+import router from '@adonisjs/core/services/router'
+import { middleware } from './kernel.js'
+
+// ✅ Correct: Single middleware
+router.get('profile', '#controllers/users_controller.profile')
+  .middleware([middleware.auth()])
+
+// ✅ Correct: Multiple middleware
+router.post('admin/users', '#controllers/admin/users_controller.store')
+  .middleware([middleware.auth(), middleware.role({ roles: ['admin'] })])
+
+// ✅ Correct: Route group with middleware
+router.group(() => {
+  router.resource('posts', '#controllers/posts_controller')
+  router.resource('comments', '#controllers/comments_controller')
+}).prefix('api').middleware([middleware.auth()])
+
+// ✅ Correct: Conditional middleware
+router.get('public-data', '#controllers/data_controller.public')
+  .middleware([middleware.throttle({ max: 100, duration: '1m' })])
+```
+
+### Common Middleware Patterns
+
+#### Authentication Middleware
+
+```typescript
+// app/middleware/auth_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+export default class AuthMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    const { auth, response } = ctx
+
+    try {
+      await auth.check()
+      
+      // Optional: Add user to context for easy access
+      ctx.user = auth.user!
+      
+    } catch {
+      return response.unauthorized({
+        error: 'Authentication required',
+        code: 'UNAUTHORIZED'
+      })
+    }
+
+    return await next()
+  }
+}
+```
+
+#### Rate Limiting Middleware
+
+```typescript
+// app/middleware/throttle_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import redis from '@adonisjs/redis/services/main'
+
+export default class ThrottleMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: { max: number; duration: string }
+  ) {
+    const { request, response } = ctx
+    const key = `throttle:${request.ip()}:${request.url()}`
+    
+    const attempts = await redis.get(key)
+    const maxAttempts = options.max
+    
+    if (attempts && parseInt(attempts) >= maxAttempts) {
+      return response.tooManyRequests({
+        error: 'Rate limit exceeded'
+      })
+    }
+
+    // Increment counter
+    const ttl = options.duration === '1h' ? 3600 : 60 // Simple duration parsing
+    await redis.setex(key, ttl, attempts ? parseInt(attempts) + 1 : 1)
+
+    const result = await next()
+
+    // Add rate limit headers
+    response.header('X-RateLimit-Limit', maxAttempts.toString())
+    response.header('X-RateLimit-Remaining', 
+      (maxAttempts - parseInt(attempts || '0') - 1).toString())
+
+    return result
+  }
+}
+```
+
+#### CORS Middleware
+
+```typescript
+// app/middleware/cors_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+export default class CorsMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: {
+      origin?: string
+      methods?: string[]
+    } = {}
+  ) {
+    const { request, response } = ctx
+    
+    // Set CORS headers
+    response.header('Access-Control-Allow-Origin', options.origin || '*')
+    response.header('Access-Control-Allow-Methods', 
+      options.methods?.join(', ') || 'GET, POST, PUT, DELETE')
+    response.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+
+    // Handle preflight requests
+    if (request.method() === 'OPTIONS') {
+      return response.status(204).send('')
+    }
+
+    return await next()
+  }
+}
+```
+
+#### Logging Middleware
+
+```typescript
+// app/middleware/logger_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import logger from '@adonisjs/core/services/logger'
+
+export default class LoggerMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    const { request } = ctx
+    const startTime = Date.now()
+    
+    // Log incoming request
+    logger.info('Request started', {
+      method: request.method(),
+      url: request.url(),
+      ip: request.ip()
+    })
+
+    try {
+      const result = await next()
+      
+      // Log successful response
+      const duration = Date.now() - startTime
+      logger.info('Request completed', {
+        method: request.method(),
+        url: request.url(),
+        status: ctx.response.getStatus(),
+        duration: `${duration}ms`
+      })
+
+      return result
+    } catch (error) {
+      // Log error
+      logger.error('Request failed', {
+        method: request.method(),
+        url: request.url(),
+        error: error.message
+      })
+      
+      throw error
+    }
+  }
+}
+```
+
+#### Validation Middleware
+
+```typescript
+// app/middleware/validate_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import vine from '@vinejs/vine'
+
+export default class ValidateMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: { schema: any }
+  ) {
+    const { request, response } = ctx
+    
+    try {
+      const validatedData = await vine.validate({
+        schema: options.schema,
+        data: request.all()
+      })
+
+      // Add validated data to context
+      ctx.validatedData = validatedData
+
+    } catch (error) {
+      return response.badRequest({
+        error: 'Validation failed',
+        messages: error.messages
+      })
+    }
+
+    return await next()
+  }
+}
+```
+
+### Middleware Testing
+
+```typescript
+// tests/unit/middleware/auth_middleware.spec.ts
+import { test } from '@japa/runner'
+import { HttpContextFactory } from '@adonisjs/core/factories/http'
+import AuthMiddleware from '#middleware/auth_middleware'
+
+test.group('Auth Middleware', () => {
+  test('should allow authenticated users', async ({ assert }) => {
+    const ctx = new HttpContextFactory().create()
+    const middleware = new AuthMiddleware()
+    
+    // Mock authenticated user
+    ctx.auth.user = { id: 1, email: 'test@example.com' }
+    ctx.auth.check = async () => true
+
+    let nextCalled = false
+    const next = async () => {
+      nextCalled = true
+      return 'success'
+    }
+
+    const result = await middleware.handle(ctx, next)
+
+    assert.isTrue(nextCalled)
+    assert.equal(result, 'success')
+  })
+
+  test('should reject unauthenticated users', async ({ assert }) => {
+    const ctx = new HttpContextFactory().create()
+    const middleware = new AuthMiddleware()
+    
+    // Mock unauthenticated user
+    ctx.auth.check = async () => { 
+      throw new Error('Unauthenticated') 
+    }
+
+    let nextCalled = false
+    const next = async () => {
+      nextCalled = true
+      return 'success'
+    }
+
+    await middleware.handle(ctx, next)
+
+    assert.isFalse(nextCalled)
+    assert.equal(ctx.response.getStatus(), 401)
+  })
+})
+```
+
+### Middleware Best Practices
+
+#### DO's
+
+- ALWAYS use TypeScript types for middleware parameters
+- ALWAYS handle errors gracefully
+- ALWAYS call `await next()` to continue the chain
+- ALWAYS use dependency injection for services
+- ALWAYS add appropriate response headers
+- ALWAYS validate middleware options
+- ALWAYS test middleware thoroughly
+
+#### DON'Ts
+
+```typescript
+// ❌ Incorrect: Not calling next()
+async handle(ctx: HttpContext, next: NextFn) {
+  // Logic here
+  // Missing: await next()
+}
+
+// ❌ Incorrect: Not handling errors
+async handle(ctx: HttpContext, next: NextFn) {
+  await auth.check() // Can throw error
+  return await next()
+}
+
+// ❌ Incorrect: Blocking I/O operations
+async handle(ctx: HttpContext, next: NextFn) {
+  // Synchronous file operation
+  const data = fs.readFileSync('/path/to/file')
+  return await next()
+}
+
+// ❌ Incorrect: Not typing parameters
+async handle(ctx: any, next: any, options?: any) {
+  // No type safety
+}
+```
+
+### Global vs Named Middleware
+
+```typescript
+// ✅ Correct: Use server middleware for cross-cutting concerns
+server.use([
+  () => import('@adonisjs/cors/cors_middleware'),    // CORS for all routes
+  () => import('#middleware/logger_middleware'),      // Logging for all requests
+])
+
+// ✅ Correct: Use router middleware for route-specific logic
+router.use([
+  () => import('@adonisjs/core/bodyparser_middleware'), // Parse request body
+  () => import('@adonisjs/session/session_middleware'), // Session handling
+])
+
+// ✅ Correct: Use named middleware for optional features
+export const middleware = router.named({
+  auth: () => import('#middleware/auth_middleware'),     // Authentication
+  admin: () => import('#middleware/admin_middleware'),   // Admin access
+  throttle: () => import('#middleware/throttle_middleware'), // Rate limiting
+})
+```
+
+### Sources
+
+- [Middleware Documentation](https://docs.adonisjs.com/guides/middleware)
+- [HTTP Context](https://docs.adonisjs.com/guides/context)
+- [Middleware Testing](https://docs.adonisjs.com/guides/testing)
+````
+### adonisjs:models
+Guidelines for Lucid ORM models and database operations in AdonisJS 6
+````mdx
+## Models and Lucid ORM
+
+### Model Definition
+
+Models MUST be placed in `app/models/` and follow these patterns:
+
+#### Basic Model Structure
+
+```typescript
+// app/models/user.ts
+import { DateTime } from 'luxon'
+import { BaseModel, column, hasMany } from '@adonisjs/lucid/orm'
+import type { HasMany } from '@adonisjs/lucid/types/relations'
+import Post from './post.js'
+
+export default class User extends BaseModel {
+  @column({ isPrimary: true })
+  declare id: number
+
+  @column()
+  declare email: string
+
+  @column()
+  declare username: string
+
+  @column({ serializeAs: null }) // Don't serialize password
+  declare password: string
+
+  @column()
+  declare fullName: string
+
+  @column()
+  declare isActive: boolean
+
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+
+  // Relationships
+  @hasMany(() => Post)
+  declare posts: HasMany<typeof Post>
+}
+```
+
+#### Model Naming Conventions
+
+- Model class names MUST be PascalCase and singular (e.g., `User`, `BlogPost`)
+- File names MUST be snake_case and singular (e.g., `user.ts`, `blog_post.ts`)
+- Table names are automatically inferred as snake_case plural (e.g., `users`, `blog_posts`)
+- ALWAYS use explicit `declare` for TypeScript properties
+
+### Column Decorators
+
+```typescript
+export default class User extends BaseModel {
+  // ✅ Correct: Primary key
+  @column({ isPrimary: true })
+  declare id: number
+
+  // ✅ Correct: Custom column name
+  @column({ columnName: 'full_name' })
+  declare fullName: string
+
+  // ✅ Correct: Don't serialize sensitive data
+  @column({ serializeAs: null })
+  declare password: string
+
+  // ✅ Correct: Custom serialization name
+  @column({ serializeAs: 'display_name' })
+  declare fullName: string
+
+  // ✅ Correct: Data transformation
+  @column({
+    prepare: (value: string) => value.toLowerCase(),
+    consume: (value: string) => value.toUpperCase()
+  })
+  declare email: string
+
+  // ✅ Correct: Auto timestamps
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+
+  // ✅ Correct: Custom datetime column
+  @column.dateTime()
+  declare lastLoginAt: DateTime | null
+}
+```
+
+### Relationships
+
+```typescript
+// app/models/user.ts
+import { BaseModel, column, hasMany, hasOne } from '@adonisjs/lucid/orm'
+import type { HasMany, HasOne } from '@adonisjs/lucid/types/relations'
+import Post from './post.js'
+import Profile from './profile.js'
+
+export default class User extends BaseModel {
+  @column({ isPrimary: true })
+  declare id: number
+
+  // ✅ Correct: One-to-many relationship
+  @hasMany(() => Post)
+  declare posts: HasMany<typeof Post>
+
+  // ✅ Correct: One-to-one relationship
+  @hasOne(() => Profile)
+  declare profile: HasOne<typeof Profile>
+
+  // ✅ Correct: Custom foreign key
+  @hasMany(() => Post, {
+    foreignKey: 'authorId'
+  })
+  declare posts: HasMany<typeof Post>
+}
+
+// app/models/post.ts
+import { BaseModel, column, belongsTo, manyToMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, ManyToMany } from '@adonisjs/lucid/types/relations'
+import User from './user.js'
+import Tag from './tag.js'
+
+export default class Post extends BaseModel {
+  @column({ isPrimary: true })
+  declare id: number
+
+  @column()
+  declare userId: number
+
+  @column()
+  declare title: string
+
+  // ✅ Correct: Belongs to relationship
+  @belongsTo(() => User)
+  declare author: BelongsTo<typeof User>
+
+  // ✅ Correct: Many-to-many relationship
+  @manyToMany(() => Tag)
+  declare tags: ManyToMany<typeof Tag>
+
+  // ✅ Correct: Custom pivot table
+  @manyToMany(() => Tag, {
+    pivotTable: 'post_tags',
+    pivotForeignKey: 'post_id',
+    pivotRelatedForeignKey: 'tag_id'
+  })
+  declare tags: ManyToMany<typeof Tag>
+}
+```
+
+### Query Patterns
+
+```typescript
+// ✅ Correct: Basic queries
+export default class UserService {
+  async getAllUsers() {
+    return await User.all()
+  }
+
+  async findUser(id: number) {
+    return await User.find(id) // Returns null if not found
+  }
+
+  async findUserOrFail(id: number) {
+    return await User.findOrFail(id) // Throws exception if not found
+  }
+
+  async findByEmail(email: string) {
+    return await User.findBy('email', email)
+  }
+
+  // ✅ Correct: Query builder
+  async getActiveUsers() {
+    return await User.query()
+      .where('isActive', true)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+  }
+
+  // ✅ Correct: Queries with relationships
+  async getUsersWithPosts() {
+    return await User.query()
+      .preload('posts')
+      .where('isActive', true)
+  }
+
+  // ✅ Correct: Pagination
+  async getUsersPaginated(page: number, limit: number = 20) {
+    return await User.query()
+      .paginate(page, limit)
+  }
+
+  // ✅ Correct: Aggregation
+  async getUserStats() {
+    return await User.query()
+      .count('* as total')
+      .first()
+  }
+}
+```
+
+### Model Hooks
+
+```typescript
+// app/models/user.ts
+import { BaseModel, column, beforeSave } from '@adonisjs/lucid/orm'
+import hash from '@adonisjs/core/services/hash'
+
+export default class User extends BaseModel {
+  @column({ isPrimary: true })
+  declare id: number
+
+  @column()
+  declare email: string
+
+  @column({ serializeAs: null })
+  declare password: string
+
+  // ✅ Correct: Hash password before saving
+  @beforeSave()
+  static async hashPassword(user: User) {
+    if (user.$dirty.password) {
+      user.password = await hash.make(user.password)
+    }
+  }
+
+  // ✅ Correct: Custom methods
+  async verifyPassword(plainPassword: string) {
+    return await hash.verify(this.password, plainPassword)
+  }
+}
+```
+
+### Model Configuration
+
+```typescript
+export default class User extends BaseModel {
+  // ✅ Correct: Custom table name
+  static table = 'app_users'
+
+  // ✅ Correct: Custom primary key
+  static primaryKey = 'userId'
+
+  // ✅ Correct: Self-assigned primary key (UUIDs)
+  static selfAssignPrimaryKey = true
+
+  // ✅ Correct: Custom connection
+  static connection = 'pg'
+
+  // ✅ Correct: Disable timestamps
+  static timestamps = false
+
+  // ✅ Correct: Custom timestamp columns
+  static createdAtColumn = 'created_at'
+  static updatedAtColumn = 'updated_at'
+}
+```
+
+### Scopes
+
+```typescript
+// app/models/user.ts
+export default class User extends BaseModel {
+  @column({ isPrimary: true })
+  declare id: number
+
+  @column()
+  declare isActive: boolean
+
+  @column()
+  declare role: string
+
+  // ✅ Correct: Local scopes
+  static scopeActive(query: any) {
+    query.where('isActive', true)
+  }
+
+  static scopeByRole(query: any, role: string) {
+    query.where('role', role)
+  }
+}
+
+// Usage
+const activeUsers = await User.query().active()
+const admins = await User.query().byRole('admin')
+```
+
+### CRUD Operations
+
+```typescript
+export default class UserService {
+  // ✅ Correct: Create
+  async createUser(data: { email: string; password: string; fullName: string }) {
+    return await User.create(data)
+  }
+
+  // ✅ Correct: Update
+  async updateUser(id: number, data: Partial<{ email: string; fullName: string }>) {
+    const user = await User.findOrFail(id)
+    user.merge(data)
+    await user.save()
+    return user
+  }
+
+  // ✅ Correct: Delete
+  async deleteUser(id: number) {
+    const user = await User.findOrFail(id)
+    await user.delete()
+  }
+
+  // ✅ Correct: Bulk operations
+  async updateMultipleUsers(userIds: number[], data: any) {
+    await User.query()
+      .whereIn('id', userIds)
+      .update(data)
+  }
+}
+```
+
+### Model Testing
+
+```typescript
+// tests/unit/models/user.spec.ts
+import { test } from '@japa/runner'
+import User from '#models/user'
+
+test.group('User Model', () => {
+  test('should hash password before saving', async ({ assert }) => {
+    const user = new User()
+    user.email = 'test@example.com'
+    user.password = 'plaintext'
+    
+    await user.save()
+    
+    assert.notEqual(user.password, 'plaintext')
+    assert.isTrue(await user.verifyPassword('plaintext'))
+  })
+
+  test('should create user with valid data', async ({ assert }) => {
+    const user = await User.create({
+      email: 'test@example.com',
+      password: 'password123',
+      fullName: 'Test User'
+    })
+
+    assert.equal(user.email, 'test@example.com')
+    assert.equal(user.fullName, 'Test User')
+    assert.exists(user.id)
+  })
+})
+```
+
+### Common Anti-Patterns
+
+```typescript
+// ❌ Incorrect: Raw queries in controllers
+async index({ response }: HttpContext) {
+  const users = await Database.rawQuery('SELECT * FROM users')
+  return response.json(users)
+}
+
+// ✅ Correct: Use model methods
+async index({ response }: HttpContext) {
+  const users = await User.all()
+  return response.json(users)
+}
+
+// ❌ Incorrect: Not using relationships
+async getUserPosts(userId: number) {
+  const posts = await Database.from('posts').where('user_id', userId)
+  return posts
+}
+
+// ✅ Correct: Use relationships
+async getUserPosts(userId: number) {
+  const user = await User.query()
+    .where('id', userId)
+    .preload('posts')
+    .firstOrFail()
+  
+  return user.posts
+}
+
+// ❌ Incorrect: Not using query builder
+async searchUsers(searchTerm: string) {
+  const sql = `SELECT * FROM users WHERE email LIKE '%${searchTerm}%'`
+  return await Database.rawQuery(sql)
+}
+
+// ✅ Correct: Use query builder
+async searchUsers(searchTerm: string) {
+  return await User.query()
+    .where('email', 'like', `%${searchTerm}%`)
+    .orWhere('fullName', 'like', `%${searchTerm}%`)
+}
+```
+
+### Sources
+
+- [Lucid ORM Documentation](https://lucid.adonisjs.com)
+- [Models Guide](https://lucid.adonisjs.com/docs/models)
+- [Relationships](https://lucid.adonisjs.com/docs/relationships)
+- [Query Builder](https://lucid.adonisjs.com/docs/select-query-builder)
+````
+### adonisjs:performance
+Performance optimization guidelines for AdonisJS 6
+````mdx
+## Performance Optimization
+
+### Database Performance
+
+#### Query Optimization
+
+```typescript
+// ✅ Correct: Efficient database queries
+export default class PostService {
+  // Use eager loading to prevent N+1 queries
+  async getPostsWithAuthors() {
+    return await Post.query()
+      .preload('author')
+      .preload('comments', (query) => {
+        query.preload('user')
+        query.orderBy('createdAt', 'desc')
+        query.limit(5)
+      })
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+  }
+
+  // Use pagination for large datasets
+  async getPostsPaginated(page: number, limit: number = 20) {
+    return await Post.query()
+      .preload('author', (query) => {
+        query.select(['id', 'name', 'avatar'])
+      })
+      .paginate(page, limit)
+  }
+
+  // Use specific columns selection
+  async getPostTitles() {
+    return await Post.query()
+      .select(['id', 'title', 'slug', 'publishedAt'])
+      .where('published', true)
+      .orderBy('publishedAt', 'desc')
+  }
+
+  // Use database-level aggregation
+  async getPostStats() {
+    return await Post.query()
+      .count('* as total')
+      .countDistinct('userId as unique_authors')
+      .where('published', true)
+      .first()
+  }
+}
+```
+
+#### Database Indexing
+
+```sql
+-- ✅ Create indexes for frequently queried columns
+CREATE INDEX idx_posts_published ON posts(published);
+CREATE INDEX idx_posts_user_id ON posts(user_id);
+CREATE INDEX idx_posts_created_at ON posts(created_at);
+
+-- ✅ Composite indexes for complex queries
+CREATE INDEX idx_posts_published_created ON posts(published, created_at);
+CREATE INDEX idx_users_email_active ON users(email, is_active);
+
+-- ✅ Partial indexes for better performance
+CREATE INDEX idx_posts_published_only ON posts(created_at) WHERE published = true;
+```
+
+#### Connection Pooling
+
+```typescript
+// config/database.ts
+export default {
+  connection: 'pg',
+  connections: {
+    pg: {
+      client: 'pg',
+      connection: {
+        host: env.get('DB_HOST'),
+        port: env.get('DB_PORT'),
+        user: env.get('DB_USER'),
+        password: env.get('DB_PASSWORD'),
+        database: env.get('DB_DATABASE'),
+      },
+      // ✅ Optimize connection pool
+      pool: {
+        min: 2,
+        max: 10,
+        acquireTimeoutMillis: 60000,
+        createTimeoutMillis: 30000,
+        destroyTimeoutMillis: 5000,
+        idleTimeoutMillis: 30000,
+        reapIntervalMillis: 1000,
+        createRetryIntervalMillis: 100,
+      },
+      // ✅ Enable debugging in development only
+      debug: env.get('NODE_ENV') === 'development',
+    }
+  }
+}
+```
+
+### Caching Strategies
+
+#### Redis Caching
+
+```typescript
+// app/services/cache_service.ts
+import redis from '@adonisjs/redis/services/main'
+
+export default class CacheService {
+  // ✅ Cache user data
+  async getUser(id: number): Promise<User | null> {
+    const cacheKey = `user:${id}`
+    
+    // Try cache first
+    const cached = await redis.get(cacheKey)
+    if (cached) {
+      return JSON.parse(cached)
+    }
+
+    // Get from database and cache
+    const user = await User.find(id)
+    if (user) {
+      await redis.setex(cacheKey, 3600, JSON.stringify(user))
+    }
+
+    return user
+  }
+
+  // ✅ Cache popular posts
+  async getPopularPosts(): Promise<Post[]> {
+    const cacheKey = 'posts:popular'
+    
+    const cached = await redis.get(cacheKey)
+    if (cached) {
+      return JSON.parse(cached)
+    }
+
+    const posts = await Post.query()
+      .preload('author')
+      .orderBy('views', 'desc')
+      .limit(10)
+
+    await redis.setex(cacheKey, 900, JSON.stringify(posts))
+    return posts
+  }
+
+  // ✅ Cache invalidation
+  async invalidateUserCache(userId: number) {
+    await redis.del(`user:${userId}`)
+  }
+}
+```
+
+#### HTTP Response Caching
+
+```typescript
+// app/middleware/cache_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import redis from '@adonisjs/redis/services/main'
+
+export default class CacheMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: { ttl?: number } = {}
+  ) {
+    const { request, response } = ctx
+    
+    // Only cache GET requests
+    if (request.method() !== 'GET') {
+      return await next()
+    }
+
+    const cacheKey = `http:${request.url()}`
+    const ttl = options.ttl || 300 // 5 minutes
+
+    // Check cache
+    const cached = await redis.get(cacheKey)
+    if (cached) {
+      response.header('X-Cache', 'HIT')
+      return response.json(JSON.parse(cached))
+    }
+
+    // Execute request
+    const result = await next()
+
+    // Cache 200 responses
+    if (response.getStatus() === 200) {
+      await redis.setex(cacheKey, ttl, JSON.stringify(response.getBody()))
+      response.header('X-Cache', 'MISS')
+    }
+
+    return result
+  }
+}
+```
+
+### Memory Optimization
+
+```typescript
+// ✅ Use Maps for caching
+export default class UserService {
+  private userCache = new Map<number, User>()
+
+  async getUserByEmail(email: string): Promise<User | null> {
+    const user = await User.findBy('email', email)
+    if (user) {
+      this.userCache.set(user.id, user)
+    }
+    return user
+  }
+
+  // ✅ Clean up cache periodically
+  private cleanupCache() {
+    if (this.userCache.size > 1000) {
+      this.userCache.clear()
+    }
+  }
+}
+```
+
+#### Streaming Large Files
+
+```typescript
+// app/controllers/reports_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import { createReadStream } from 'node:fs'
+
+export default class ReportsController {
+  // ✅ Stream files instead of loading into memory
+  async downloadReport({ response, params }: HttpContext) {
+    const filename = `report-${params.id}.csv`
+    const filepath = `./storage/reports/${filename}`
+
+    response.header('Content-Type', 'text/csv')
+    response.header('Content-Disposition', `attachment; filename="${filename}"`)
+    
+    const stream = createReadStream(filepath)
+    return response.stream(stream)
+  }
+
+  // ✅ Process data in chunks
+  async generateReport({ response }: HttpContext) {
+    response.header('Content-Type', 'application/json')
+    
+    const users = await User.query().limit(1000)
+    return response.json({ data: users })
+  }
+}
+```
+
+### API Performance
+
+#### Response Optimization
+
+```typescript
+// app/controllers/api/posts_controller.ts
+export default class PostsController {
+  // ✅ Implement field selection
+  async index({ request, response }: HttpContext) {
+    const fields = request.input('fields', '').split(',').filter(Boolean)
+    const query = Post.query()
+
+    if (fields.length > 0) {
+      // Only select requested fields
+      query.select(fields)
+    }
+
+    // ✅ Implement cursor-based pagination for better performance
+    const cursor = request.input('cursor')
+    const limit = Math.min(request.input('limit', 20), 100)
+
+    if (cursor) {
+      query.where('id', '>', cursor)
+    }
+
+    const posts = await query
+      .preload('author', (authorQuery) => {
+        authorQuery.select(['id', 'name', 'avatar'])
+      })
+      .orderBy('id', 'asc')
+      .limit(limit)
+
+    const nextCursor = posts.length === limit ? posts[posts.length - 1].id : null
+
+    return response.json({
+      data: posts,
+      pagination: {
+        nextCursor,
+        hasMore: posts.length === limit
+      }
+    })
+  }
+
+  // ✅ Implement ETags for caching
+  async show({ params, response }: HttpContext) {
+    const post = await Post.query()
+      .where('id', params.id)
+      .preload('author')
+      .firstOrFail()
+
+    // Generate ETag based on updated timestamp
+    const etag = `"${post.updatedAt.toMillis()}"`
+    response.header('ETag', etag)
+    response.header('Cache-Control', 'max-age=300') // 5 minutes
+
+    return response.json({ data: post })
+  }
+}
+```
+
+#### Request Compression
+
+```typescript
+// app/middleware/compression_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import { gzip, deflate } from 'node:zlib'
+import { promisify } from 'node:util'
+
+export default class CompressionMiddleware {
+  private gzipAsync = promisify(gzip)
+  private deflateAsync = promisify(deflate)
+
+  async handle(ctx: HttpContext, next: NextFn) {
+    await next()
+
+    const { request, response } = ctx
+    const acceptEncoding = request.header('accept-encoding', '')
+    const body = response.getBody()
+
+    // Only compress if body is substantial
+    if (!body || typeof body !== 'string' || body.length < 1024) {
+      return
+    }
+
+    try {
+      if (acceptEncoding.includes('gzip')) {
+        const compressed = await this.gzipAsync(body)
+        response.header('Content-Encoding', 'gzip')
+        response.header('Content-Length', compressed.length.toString())
+        response.send(compressed)
+      } else if (acceptEncoding.includes('deflate')) {
+        const compressed = await this.deflateAsync(body)
+        response.header('Content-Encoding', 'deflate')
+        response.header('Content-Length', compressed.length.toString())
+        response.send(compressed)
+      }
+    } catch (error) {
+      // Fall back to uncompressed response
+      console.error('Compression failed:', error)
+    }
+  }
+}
+```
+
+### Background Jobs
+
+```typescript
+// app/services/queue_service.ts
+import redis from '@adonisjs/redis/services/main'
+
+export default class QueueService {
+  // ✅ Add job to queue
+  async addJob(queueName: string, jobData: any) {
+    const job = {
+      id: Date.now().toString(),
+      data: jobData,
+      createdAt: new Date().toISOString()
+    }
+
+    await redis.lpush(`queue:${queueName}`, JSON.stringify(job))
+  }
+
+  // ✅ Process jobs
+  async processJobs(queueName: string, processor: (data: any) => Promise<void>) {
+    while (true) {
+      try {
+        const jobData = await redis.brpop(`queue:${queueName}`, 10)
+        if (!jobData) continue
+
+        const job = JSON.parse(jobData[1])
+        await processor(job.data)
+        console.log(`Job ${job.id} completed`)
+      } catch (error) {
+        console.error('Job processing error:', error)
+      }
+    }
+  }
+}
+```
+
+### Performance Monitoring
+
+```typescript
+// app/middleware/performance_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import logger from '@adonisjs/core/services/logger'
+
+export default class PerformanceMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    const startTime = Date.now()
+
+    try {
+      const result = await next()
+      
+      const duration = Date.now() - startTime
+
+      // Log slow requests
+      if (duration > 1000) {
+        logger.warn('Slow request', {
+          method: ctx.request.method(),
+          url: ctx.request.url(),
+          duration: `${duration}ms`
+        })
+      }
+
+      // Add response time header
+      ctx.response.header('X-Response-Time', `${duration}ms`)
+      
+      return result
+    } catch (error) {
+      const duration = Date.now() - startTime
+      logger.error('Request failed', {
+        method: ctx.request.method(),
+        url: ctx.request.url(),
+        duration: `${duration}ms`,
+        error: error.message
+      })
+
+      throw error
+    }
+  }
+}
+```
+
+### Performance Best Practices
+
+#### DO's
+
+```typescript
+// ✅ Use database transactions for related operations
+async createUserWithProfile(userData: any, profileData: any) {
+  const trx = await Database.transaction()
+  
+  try {
+    const user = await User.create(userData, { client: trx })
+    const profile = await Profile.create({
+      ...profileData,
+      userId: user.id
+    }, { client: trx })
+    
+    await trx.commit()
+    return { user, profile }
+  } catch (error) {
+    await trx.rollback()
+    throw error
+  }
+}
+
+// ✅ Use bulk operations for multiple records
+async updateMultipleUsers(userIds: number[], data: any) {
+  return await User.query()
+    .whereIn('id', userIds)
+    .update(data)
+}
+
+// ✅ Implement proper pagination
+async getPaginatedPosts(page: number, limit: number) {
+  return await Post.query()
+    .preload('author', query => query.select(['id', 'name']))
+    .paginate(page, Math.min(limit, 100)) // Cap at 100
+}
+```
+
+#### DON'Ts
+
+```typescript
+// ❌ N+1 query problem
+async getBadPosts() {
+  const posts = await Post.all()
+  
+  for (const post of posts) {
+    post.author = await User.find(post.userId) // N+1 queries!
+  }
+  
+  return posts
+}
+
+// ❌ Loading too much data
+async getAllUsers() {
+  return await User.all() // Could be millions of records!
+}
+
+// ❌ Not using indexes
+await User.query().where('email', 'like', '%@gmail.com') // Can't use index
+
+// ❌ Synchronous operations in async context
+async processFile() {
+  const data = fs.readFileSync('large-file.txt') // Blocks the event loop
+  return data
+}
+```
+
+### Sources
+
+- [AdonisJS Performance Guide](https://docs.adonisjs.com/guides/performance)
+- [Node.js Performance Best Practices](https://nodejs.org/en/docs/guides/simple-profiling/)
+- [Database Performance](https://lucid.adonisjs.com/docs/query-performance)
+- [Redis Caching](https://docs.adonisjs.com/guides/redis)
+````
+### adonisjs:security
+Security best practices for AdonisJS 6 applications
+````mdx
+## Security Best Practices
+
+### Input Validation and Sanitization
+
+ALWAYS validate and sanitize user input using VineJS validators:
+
+```typescript
+// ✅ Correct: Comprehensive input validation
+export const createPostValidator = vine.compile(
+  vine.object({
+    title: vine.string().minLength(1).maxLength(200).trim(),
+    content: vine.string().minLength(10).escape(), // Escape HTML
+    slug: vine.string().regex(/^[a-z0-9-]+$/), // Only alphanumeric and hyphens
+    tags: vine.array(vine.string().minLength(1).maxLength(50)).maxLength(10),
+    categoryId: vine.number().positive(),
+    metadata: vine.object({
+      seoTitle: vine.string().maxLength(60).trim().optional(),
+      seoDescription: vine.string().maxLength(160).trim().optional()
+    }).optional()
+  })
+)
+
+// ✅ Correct: File upload validation
+export const uploadValidator = vine.compile(
+  vine.object({
+    file: vine.file({
+      size: '5mb',
+      extnames: ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
+    }),
+    description: vine.string().maxLength(500).optional()
+  })
+)
+```
+
+### Authentication Security
+
+#### Password Security
+
+```typescript
+// app/models/user.ts
+import hash from '@adonisjs/core/services/hash'
+
+export default class User extends BaseModel {
+  @column({ serializeAs: null })
+  declare password: string
+
+  // ✅ Correct: Hash passwords
+  @beforeSave()
+  static async hashPassword(user: User) {
+    if (user.$dirty.password) {
+      user.password = await hash.make(user.password)
+    }
+  }
+
+  // ✅ Correct: Password verification
+  async verifyPassword(plainPassword: string) {
+    return await hash.verify(this.password, plainPassword)
+  }
+}
+```
+
+#### Session Security
+
+```typescript
+// config/session.ts
+import env from '#start/env'
+
+export default {
+  driver: env.get('SESSION_DRIVER'),
+  cookieName: 'adonis-session',
+  
+  // ✅ Secure session configuration
+  cookie: {
+    path: '/',
+    maxAge: '2h',
+    httpOnly: true, // Prevent XSS
+    secure: env.get('NODE_ENV') === 'production', // HTTPS in production
+    sameSite: 'strict' // CSRF protection
+  },
+  
+  age: '2 hours'
+}
+```
+
+#### JWT Token Security
+
+```typescript
+// app/services/auth_service.ts
+import jwt from 'jsonwebtoken'
+import env from '#start/env'
+
+export default class AuthService {
+  // ✅ Correct: JWT token generation
+  generateToken(user: User) {
+    return jwt.sign(
+      { 
+        sub: user.id,
+        email: user.email,
+        role: user.role
+      },
+      env.get('JWT_SECRET'),
+      {
+        expiresIn: '1h'
+      }
+    )
+  }
+
+  // ✅ Correct: Token verification
+  verifyToken(token: string) {
+    return jwt.verify(token, env.get('JWT_SECRET'))
+  }
+}
+```
+
+### CORS Security
+
+```typescript
+// config/cors.ts
+import env from '#start/env'
+
+export default {
+  enabled: true,
+  
+  // ✅ Correct: Configure allowed origins
+  origin: env.get('NODE_ENV') === 'production' 
+    ? ['https://yourdomain.com']
+    : true, // Allow all origins in development
+    
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  headers: ['Content-Type', 'Authorization'],
+  credentials: true
+}
+```
+
+### SQL Injection Prevention
+
+```typescript
+// ✅ Correct: Use query builder (automatically escapes)
+const users = await User.query()
+  .where('email', email)
+  .where('role', role)
+  .limit(10)
+
+// ✅ Correct: Parameterized raw queries
+const result = await Database.rawQuery(
+  'SELECT * FROM users WHERE email = ? AND created_at > ?',
+  [email, startDate]
+)
+
+// ❌ Incorrect: String concatenation (vulnerable to SQL injection)
+const result = await Database.rawQuery(
+  `SELECT * FROM users WHERE email = '${email}'`
+)
+```
+
+### XSS Prevention
+
+```typescript
+// app/middleware/security_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+export default class SecurityMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    // ✅ Correct: Set security headers
+    ctx.response.header('X-Content-Type-Options', 'nosniff')
+    ctx.response.header('X-Frame-Options', 'DENY')
+    ctx.response.header('X-XSS-Protection', '1; mode=block')
+    
+    // ✅ Basic Content Security Policy
+    ctx.response.header('Content-Security-Policy', "default-src 'self'")
+
+    return await next()
+  }
+}
+```
+
+### CSRF Protection
+
+```typescript
+// app/middleware/csrf_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+export default class CsrfMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    const { request, response, session } = ctx
+    
+    // ✅ Generate CSRF token for safe methods
+    if (['GET', 'HEAD', 'OPTIONS'].includes(request.method())) {
+      const token = await this.generateToken()
+      session.put('_csrf_token', token)
+      response.header('X-CSRF-Token', token)
+      return await next()
+    }
+
+    // ✅ Verify CSRF token for unsafe methods
+    const sessionToken = session.get('_csrf_token')
+    const requestToken = request.header('x-csrf-token') || request.input('_csrf_token')
+
+    if (!sessionToken || !requestToken || sessionToken !== requestToken) {
+      return response.forbidden({
+        error: 'CSRF token mismatch',
+        code: 'CSRF_TOKEN_MISMATCH'
+      })
+    }
+
+    return await next()
+  }
+
+  private async generateToken(): Promise<string> {
+    const crypto = await import('node:crypto')
+    return crypto.randomBytes(32).toString('hex')
+  }
+}
+```
+
+### Rate Limiting
+
+```typescript
+// app/middleware/rate_limit_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import redis from '@adonisjs/redis/services/main'
+
+export default class RateLimitMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: { max: number; window: number }
+  ) {
+    const { request, response } = ctx
+    const key = `rate_limit:${request.ip()}`
+    
+    const current = await redis.get(key)
+    const requests = current ? parseInt(current) : 0
+
+    if (requests >= options.max) {
+      return response.tooManyRequests({
+        error: 'Too many requests'
+      })
+    }
+
+    // Increment counter
+    await redis.incr(key)
+    await redis.expire(key, options.window)
+
+    // Add rate limit headers
+    response.header('X-RateLimit-Limit', options.max.toString())
+    response.header('X-RateLimit-Remaining', (options.max - requests - 1).toString())
+
+    return await next()
+  }
+}
+```
+
+### File Upload Security
+
+```typescript
+// app/services/file_upload_service.ts
+import { MultipartFile } from '@adonisjs/core/bodyparser'
+
+export default class FileUploadService {
+  private allowedMimeTypes = [
+    'image/jpeg',
+    'image/png',
+    'application/pdf'
+  ]
+
+  async uploadFile(file: MultipartFile): Promise<string> {
+    // ✅ Validate file type
+    if (!this.allowedMimeTypes.includes(file.type || '')) {
+      throw new Error('File type not allowed')
+    }
+
+    // ✅ Validate file size (2MB max)
+    if (file.size > 2 * 1024 * 1024) {
+      throw new Error('File too large')
+    }
+
+    // ✅ Generate secure filename
+    const filename = this.generateSecureFilename(file.extname || '')
+    await file.move('uploads', { name: filename })
+
+    return filename
+  }
+
+  private generateSecureFilename(extension: string): string {
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).substring(2)
+    return `${timestamp}_${random}${extension}`
+  }
+}
+```
+
+### Environment Security
+
+```typescript
+// start/env.ts
+import { Env } from '@adonisjs/core/env'
+
+export default await Env.create(new URL('../', import.meta.url), {
+  // ✅ Environment validation
+  NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
+  APP_KEY: Env.schema.string(),
+  DB_PASSWORD: Env.schema.string(),
+  JWT_SECRET: Env.schema.string()
+})
+```
+
+### Secure Logging
+
+```typescript
+// app/services/audit_service.ts
+import logger from '@adonisjs/core/services/logger'
+
+export default class AuditService {
+  // ✅ Log authentication attempts
+  logAuthenticationAttempt(email: string, success: boolean) {
+    logger.info('Authentication attempt', {
+      email: this.maskEmail(email),
+      success,
+      timestamp: new Date().toISOString()
+    })
+  }
+
+  // ✅ Log data access
+  logDataAccess(userId: number, resource: string, action: string) {
+    logger.info('Data access', {
+      userId,
+      resource,
+      action,
+      timestamp: new Date().toISOString()
+    })
+  }
+
+  private maskEmail(email: string): string {
+    const [username, domain] = email.split('@')
+    return `${username.substring(0, 2)}***@${domain}`
+  }
+}
+```
+
+### Security Headers
+
+```typescript
+// app/middleware/security_headers_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+export default class SecurityHeadersMiddleware {
+  async handle(ctx: HttpContext, next: NextFn) {
+    const { response } = ctx
+
+    // ✅ Basic security headers
+    response.header('X-Content-Type-Options', 'nosniff')
+    response.header('X-Frame-Options', 'DENY')
+    response.header('X-XSS-Protection', '1; mode=block')
+    
+    // ✅ HTTPS enforcement in production
+    if (ctx.request.secure()) {
+      response.header('Strict-Transport-Security', 'max-age=31536000')
+    }
+
+    return await next()
+  }
+}
+```
+
+### Common Security Anti-Patterns
+
+```typescript
+// ❌ Incorrect: Exposing sensitive information
+return response.json({
+  user: user, // Includes password hash and other sensitive data
+  token: token
+})
+
+// ✅ Correct: Only expose necessary data
+return response.json({
+  user: {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role
+  },
+  token: token
+})
+
+// ❌ Incorrect: No input validation
+async store({ request }: HttpContext) {
+  const data = request.all() // Raw, unvalidated data
+  return User.create(data)
+}
+
+// ✅ Correct: Always validate input
+async store({ request }: HttpContext) {
+  const data = await request.validateUsing(createUserValidator)
+  return User.create(data)
+}
+
+// ❌ Incorrect: Logging sensitive data
+logger.info('User login', { email, password, token })
+
+// ✅ Correct: Log only non-sensitive data
+logger.info('User login', { 
+  email: maskEmail(email), 
+  success: true,
+  timestamp: new Date()
+})
+
+// ❌ Incorrect: Weak authentication
+if (user.password === plainPassword) {
+  // Never compare passwords directly
+}
+
+// ✅ Correct: Secure password verification
+if (await user.verifyPassword(plainPassword)) {
+  // Use proper password hashing/verification
+}
+```
+
+### Security Checklist
+
+#### Before Deployment
+
+- [ ] All environment variables are validated
+- [ ] APP_KEY is 32+ characters and unique per environment
+- [ ] HTTPS is enforced in production
+- [ ] Database credentials are secure and not default
+- [ ] All user inputs are validated and sanitized
+- [ ] File uploads are restricted and validated
+- [ ] Rate limiting is implemented on sensitive endpoints
+- [ ] CORS is properly configured
+- [ ] Security headers are set
+- [ ] Sensitive data is not logged
+- [ ] Dependencies are up to date and vulnerability-free
+- [ ] Database queries use parameterization
+- [ ] Sessions are configured securely
+- [ ] Error messages don't reveal sensitive information
+
+### Sources
+
+- [AdonisJS Security Guide](https://docs.adonisjs.com/guides/security)
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+- [Node.js Security Best Practices](https://nodejs.org/en/docs/guides/security/)
+- [MDN Web Security](https://developer.mozilla.org/en-US/docs/Web/Security)
+````
+### adonisjs:structure
+Guidelines for organizing AdonisJS 6 applications
+````mdx
+## Project Structure
+
+### Standard AdonisJS 6 Structure
+
+```
+root/
+├── app/
+│   ├── controllers/         # HTTP controllers
+│   ├── middleware/         # Custom middleware
+│   ├── models/             # Lucid ORM models
+│   ├── services/           # Business logic services
+│   ├── validators/         # VineJS validation schemas
+│   ├── exceptions/         # Custom exceptions
+│   └── policies/           # Authorization policies
+├── bin/
+│   ├── console.ts          # Console commands entry
+│   ├── server.ts           # HTTP server entry
+│   └── test.ts             # Testing entry
+├── config/
+│   ├── app.ts              # App configuration
+│   ├── database.ts         # Database configuration
+│   ├── cors.ts             # CORS configuration
+│   ├── session.ts          # Session configuration
+│   └── auth.ts             # Authentication config
+├── database/
+│   ├── migrations/         # Database migrations
+│   ├── seeders/           # Database seeders
+│   └── factories/         # Model factories
+├── public/                 # Static assets
+├── resources/
+│   ├── views/             # Edge templates
+│   ├── js/                # Frontend JavaScript
+│   └── css/               # Frontend CSS
+├── start/
+│   ├── routes.ts          # Route definitions
+│   ├── kernel.ts          # HTTP kernel
+│   └── env.ts             # Environment validation
+├── tests/
+│   ├── functional/        # End-to-end tests
+│   ├── unit/             # Unit tests
+│   └── bootstrap.ts      # Test bootstrap
+├── types/                 # TypeScript definitions
+├── .env                   # Environment variables
+├── .env.example          # Environment template
+├── adonisrc.ts           # AdonisJS configuration
+├── package.json          # Dependencies
+└── tsconfig.json         # TypeScript config
+```
+
+### Mandatory Rules
+
+- ALWAYS use the `app/` directory for application domain logic
+- Controllers MUST be placed in `app/controllers/`
+- Models MUST be placed in `app/models/`  
+- Middleware MUST be placed in `app/middleware/`
+- Services MUST be placed in `app/services/`
+- Validators MUST be placed in `app/validators/`
+- Routes MUST be defined in `start/routes.ts`
+- Configuration files MUST be placed in `config/`
+- Database files MUST be placed in `database/`
+- NEVER commit `.env` files to version control
+- ALWAYS provide `.env.example` with sample values
+
+### File Naming Conventions
+
+- Controllers: PascalCase with "Controller" suffix (e.g., `UsersController.ts`)
+- Models: PascalCase, singular (e.g., `User.ts`)
+- Middleware: PascalCase with "Middleware" suffix (e.g., `AuthMiddleware.ts`)
+- Services: PascalCase with "Service" suffix (e.g., `UserService.ts`)
+- Validators: PascalCase with "Validator" suffix (e.g., `UserValidator.ts`)
+- Routes: snake_case for file names (e.g., `user_routes.ts`)
+- Config files: snake_case (e.g., `database.ts`)
+
+### Import Aliases
+
+AdonisJS 6 provides sub-path imports via `package.json`:
+
+```json
+{
+  "imports": {
+    "#controllers/*": "./app/controllers/*.js",
+    "#models/*": "./app/models/*.js",
+    "#middleware/*": "./app/middleware/*.js",
+    "#services/*": "./app/services/*.js",
+    "#validators/*": "./app/validators/*.js",
+    "#config/*": "./config/*.js",
+    "#types/*": "./types/*.js"
+  }
+}
+```
+
+ALWAYS use these import aliases instead of relative paths:
+
+```typescript
+// ✅ Correct
+import User from '#models/user'
+import UsersController from '#controllers/users_controller'
+
+// ❌ Incorrect  
+import User from '../models/User.js'
+import UsersController from './UsersController.js'
+```
+
+### Examples
+
+#### Basic Controller Structure
+
+```typescript
+// app/controllers/users_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import User from '#models/user'
+
+export default class UsersController {
+  async index({ response }: HttpContext) {
+    const users = await User.all()
+    return response.json(users)
+  }
+
+  async show({ params, response }: HttpContext) {
+    const user = await User.findOrFail(params.id)
+    return response.json(user)
+  }
+}
+```
+
+#### Service Layer Structure
+
+```typescript
+// app/services/user_service.ts
+import User from '#models/user'
+import { Exception } from '@adonisjs/core/exceptions'
+
+export default class UserService {
+  async createUser(data: { email: string; password: string }) {
+    const existingUser = await User.findBy('email', data.email)
+    if (existingUser) {
+      throw new Exception('User already exists', { status: 409 })
+    }
+
+    return await User.create(data)
+  }
+
+  async getUserProfile(userId: number) {
+    return await User.query()
+      .where('id', userId)
+      .preload('posts')
+      .firstOrFail()
+  }
+}
+```
+
+#### Route Organization
+
+```typescript
+// start/routes.ts
+import router from '@adonisjs/core/services/router'
+import { middleware } from './kernel.js'
+
+// API routes
+router.group(() => {
+  router.get('users', '#controllers/users_controller.index')
+  router.post('users', '#controllers/users_controller.store')
+  router.get('users/:id', '#controllers/users_controller.show')
+  router.put('users/:id', '#controllers/users_controller.update')
+  router.delete('users/:id', '#controllers/users_controller.destroy')
+}).prefix('api/v1').middleware([middleware.auth()])
+
+// Auth routes
+router.group(() => {
+  router.post('login', '#controllers/auth_controller.login')
+  router.post('register', '#controllers/auth_controller.register')
+  router.post('logout', '#controllers/auth_controller.logout')
+}).prefix('auth')
+```
+
+### Sources
+
+- [AdonisJS 6 Folder Structure](https://docs.adonisjs.com/guides/folder-structure)
+- [Import Aliases](https://docs.adonisjs.com/guides/folder-structure#import-aliases)
+- [File Structure Best Practices](https://docs.adonisjs.com/guides/folder-structure)
+````
+### adonisjs:testing
+Guidelines for testing patterns in AdonisJS 6
+````mdx
+## Testing Patterns
+
+### Test Structure
+
+Tests MUST be organized in the `tests/` directory:
+
+```
+tests/
+├── bootstrap.ts          # Test bootstrap
+├── functional/          # End-to-end tests
+│   ├── auth.spec.ts     # Authentication tests
+│   ├── users.spec.ts    # User management tests
+│   └── posts.spec.ts    # Post management tests
+├── unit/                # Unit tests
+│   ├── models/          # Model tests
+│   ├── services/        # Service tests
+│   ├── validators/      # Validator tests
+│   └── middleware/      # Middleware tests
+└── integration/         # Integration tests
+    ├── database.spec.ts # Database tests
+    └── email.spec.ts    # Email service tests
+```
+
+### Test Configuration
+
+```typescript
+// tests/bootstrap.ts
+import { assert } from '@japa/assert'
+import { expectTypeOf } from '@japa/expect-type'
+import { configure, processCLIArgs, run } from '@japa/runner'
+import { fileSystem } from '@japa/file-system'
+import { apiClient } from '@japa/api-client'
+
+processCLIArgs(process.argv.splice(2))
+
+configure({
+  files: [
+    'tests/unit/**/*.spec.ts',
+    'tests/functional/**/*.spec.ts',
+    'tests/integration/**/*.spec.ts'
+  ],
+  plugins: [
+    assert(),
+    expectTypeOf(),
+    fileSystem(),
+    apiClient({
+      baseURL: 'http://localhost:3333'
+    })
+  ],
+  reporters: {
+    activated: ['spec'],
+    list: [
+      'spec'
+    ]
+  }
+})
+
+run()
+```
+
+### Unit Testing
+
+#### Model Testing
+
+```typescript
+// tests/unit/models/user.spec.ts
+import { test } from '@japa/runner'
+import User from '#models/user'
+import { UserFactory } from '#factories/user_factory'
+
+test.group('User Model', () => {
+  test('should hash password before saving', async ({ assert }) => {
+    const user = new User()
+    user.email = 'test@example.com'
+    user.password = 'plaintext'
+    user.fullName = 'Test User'
+    
+    await user.save()
+    
+    assert.notEqual(user.password, 'plaintext')
+    assert.isTrue(await user.verifyPassword('plaintext'))
+  })
+
+  test('should generate username from email if not provided', async ({ assert }) => {
+    const user = await User.create({
+      email: 'john.doe@example.com',
+      password: 'password123',
+      fullName: 'John Doe'
+    })
+
+    assert.equal(user.username, 'john.doe')
+  })
+
+  test('should have posts relationship', async ({ assert }) => {
+    const user = await UserFactory.create()
+    const posts = await user.related('posts').query()
+    
+    assert.isArray(posts)
+  })
+})
+```
+
+#### Service Testing
+
+```typescript
+// tests/unit/services/user_service.spec.ts
+import { test } from '@japa/runner'
+import UserService from '#services/user_service'
+import { UserFactory } from '#factories/user_factory'
+
+test.group('User Service', () => {
+  test('should create user with valid data', async ({ assert }) => {
+    const userService = new UserService()
+    
+    const userData = {
+      email: 'test@example.com',
+      password: 'password123',
+      fullName: 'Test User'
+    }
+
+    const user = await userService.createUser(userData)
+
+    assert.equal(user.email, userData.email)
+    assert.equal(user.fullName, userData.fullName)
+    assert.exists(user.id)
+  })
+
+  test('should update user', async ({ assert }) => {
+    const userService = new UserService()
+    const user = await UserFactory.create()
+
+    const updatedUser = await userService.updateUser(user.id, {
+      fullName: 'Updated Name'
+    })
+
+    assert.equal(updatedUser.fullName, 'Updated Name')
+  })
+})
+```
+
+#### Validator Testing
+
+```typescript
+// tests/unit/validators/user_validator.spec.ts
+import { test } from '@japa/runner'
+import vine from '@vinejs/vine'
+import { createUserValidator } from '#validators/user_validator'
+
+test.group('User Validator', () => {
+  test('should validate correct user data', async ({ assert }) => {
+    const data = {
+      email: 'test@example.com',
+      password: 'SecurePass123!',
+      passwordConfirmation: 'SecurePass123!',
+      fullName: 'John Doe'
+    }
+
+    const result = await vine.validate({
+      schema: createUserValidator,
+      data
+    })
+
+    assert.properties(result, ['email', 'password', 'fullName'])
+  })
+
+  test('should fail with invalid email format', async ({ assert }) => {
+    const data = {
+      email: 'invalid-email',
+      password: 'SecurePass123!',
+      passwordConfirmation: 'SecurePass123!',
+      fullName: 'John Doe'
+    }
+
+    await assert.rejects(
+      () => vine.validate({ schema: createUserValidator, data }),
+      (error) => error.code === 'E_VALIDATION_ERROR'
+    )
+  })
+
+  test('should fail with mismatched password confirmation', async ({ assert }) => {
+    const data = {
+      email: 'test@example.com',
+      password: 'SecurePass123!',
+      passwordConfirmation: 'DifferentPass456!',
+      fullName: 'John Doe'
+    }
+
+    await assert.rejects(
+      () => vine.validate({ schema: createUserValidator, data })
+    )
+  })
+})
+```
+
+### Functional Testing
+
+#### Authentication Tests
+
+```typescript
+// tests/functional/auth.spec.ts
+import { test } from '@japa/runner'
+import { UserFactory } from '#factories/user_factory'
+
+test.group('Authentication', () => {
+  test('should login with valid credentials', async ({ client, assert }) => {
+    const user = await UserFactory.create({
+      email: 'test@example.com',
+      password: 'password123'
+    })
+
+    const response = await client.post('/auth/login').json({
+      email: 'test@example.com',
+      password: 'password123'
+    })
+
+    response.assertStatus(200)
+    response.assertBodyContains({
+      message: 'Login successful'
+    })
+  })
+
+  test('should reject invalid credentials', async ({ client }) => {
+    const response = await client.post('/auth/login').json({
+      email: 'nonexistent@example.com',
+      password: 'wrongpassword'
+    })
+
+    response.assertStatus(401)
+    response.assertBodyContains({
+      error: 'Invalid credentials'
+    })
+  })
+
+  test('should register new user', async ({ client }) => {
+    const response = await client.post('/auth/register').json({
+      email: 'newuser@example.com',
+      password: 'password123',
+      passwordConfirmation: 'password123',
+      fullName: 'New User',
+      agreeToTerms: true
+    })
+
+    response.assertStatus(201)
+    response.assertBodyContains({
+      message: 'Registration successful'
+    })
+  })
+
+  test('should access protected route with token', async ({ client }) => {
+    const user = await UserFactory.create()
+    const token = await User.accessTokens.create(user)
+
+    const response = await client.get('/api/profile')
+      .header('Authorization', `Bearer ${token.value!.release()}`)
+
+    response.assertStatus(200)
+    response.assertBodyContains({
+      user: {
+        id: user.id,
+        email: user.email
+      }
+    })
+  })
+})
+```
+
+#### API Tests
+
+```typescript
+// tests/functional/posts.spec.ts
+import { test } from '@japa/runner'
+import { UserFactory } from '#factories/user_factory'
+import { PostFactory } from '#factories/post_factory'
+
+test.group('Posts API', () => {
+  test('should list all posts', async ({ client }) => {
+    await PostFactory.createMany(3)
+
+    const response = await client.get('/api/posts')
+
+    response.assertStatus(200)
+    response.assertBodyContains({
+      data: (posts: any[]) => posts.length === 3
+    })
+  })
+
+  test('should create post when authenticated', async ({ client }) => {
+    const user = await UserFactory.create()
+    const token = await User.accessTokens.create(user)
+
+    const postData = {
+      title: 'Test Post',
+      content: 'This is a test post content'
+    }
+
+    const response = await client.post('/api/posts')
+      .header('Authorization', `Bearer ${token.value!.release()}`)
+      .json(postData)
+
+    response.assertStatus(201)
+    response.assertBodyContains({
+      data: {
+        title: postData.title
+      }
+    })
+  })
+
+  test('should reject unauthenticated post creation', async ({ client }) => {
+    const response = await client.post('/api/posts').json({
+      title: 'Test Post',
+      content: 'Content'
+    })
+
+    response.assertStatus(401)
+  })
+
+  test('should update own post', async ({ client }) => {
+    const user = await UserFactory.create()
+    const post = await PostFactory.merge({ userId: user.id }).create()
+    const token = await User.accessTokens.create(user)
+
+    const response = await client.put(`/api/posts/${post.id}`)
+      .header('Authorization', `Bearer ${token.value!.release()}`)
+      .json({
+        title: 'Updated Title'
+      })
+
+    response.assertStatus(200)
+    response.assertBodyContains({
+      data: {
+        title: 'Updated Title'
+      }
+    })
+  })
+})
+```
+
+### Database Testing
+
+```typescript
+// tests/integration/database.spec.ts
+import { test } from '@japa/runner'
+import Database from '@adonisjs/lucid/services/db'
+import User from '#models/user'
+
+test.group('Database Integration', () => {
+  test('should handle database transactions', async ({ assert }) => {
+    const trx = await Database.transaction()
+
+    try {
+      const user = await User.create({
+        email: 'transaction@example.com',
+        password: 'password123',
+        fullName: 'Transaction User'
+      }, { client: trx })
+
+      assert.exists(user.id)
+      await trx.rollback()
+
+      // User should not exist after rollback
+      const foundUser = await User.findBy('email', 'transaction@example.com')
+      assert.isNull(foundUser)
+    } catch (error) {
+      await trx.rollback()
+      throw error
+    }
+  })
+})
+```
+
+### Model Factories
+
+```typescript
+// database/factories/user_factory.ts
+import User from '#models/user'
+import { Factory } from '@adonisjs/lucid/factories'
+
+export const UserFactory = Factory.define(User, async ({ faker }) => {
+  return {
+    email: faker.internet.email(),
+    password: 'password123',
+    fullName: faker.person.fullName(),
+    role: 'user'
+  }
+}).build()
+```
+
+```typescript
+// database/factories/post_factory.ts
+import Post from '#models/post'
+import { Factory } from '@adonisjs/lucid/factories'
+import { UserFactory } from './user_factory.js'
+
+export const PostFactory = Factory.define(Post, async ({ faker }) => {
+  return {
+    title: faker.lorem.sentence(),
+    content: faker.lorem.paragraphs(3),
+    slug: faker.lorem.slug(),
+    published: faker.datatype.boolean()
+  }
+})
+.relation('author', () => UserFactory)
+.build()
+```
+
+### Testing Middleware
+
+```typescript
+// tests/unit/middleware/auth_middleware.spec.ts
+import { test } from '@japa/runner'
+import { HttpContextFactory } from '@adonisjs/core/factories/http'
+import AuthMiddleware from '#middleware/auth_middleware'
+
+test.group('Auth Middleware', () => {
+  test('should allow authenticated requests', async ({ assert }) => {
+    const ctx = new HttpContextFactory().create()
+    const middleware = new AuthMiddleware()
+    
+    // Mock authentication
+    ctx.auth.check = async () => {}
+    ctx.auth.isAuthenticated = true
+
+    let nextCalled = false
+    const next = async () => {
+      nextCalled = true
+      return 'success'
+    }
+
+    const result = await middleware.handle(ctx, next)
+
+    assert.isTrue(nextCalled)
+    assert.equal(result, 'success')
+  })
+
+  test('should reject unauthenticated requests', async ({ assert }) => {
+    const ctx = new HttpContextFactory().create()
+    const middleware = new AuthMiddleware()
+    
+    // Mock failed authentication
+    ctx.auth.check = async () => {
+      throw new Error('Unauthenticated')
+    }
+    ctx.auth.isAuthenticated = false
+
+    let nextCalled = false
+    const next = async () => {
+      nextCalled = true
+    }
+
+    await middleware.handle(ctx, next)
+
+    assert.isFalse(nextCalled)
+    assert.equal(ctx.response.getStatus(), 401)
+  })
+})
+```
+
+### Test Database Setup
+
+```typescript
+// tests/setup.ts
+import { test } from '@japa/runner'
+import Database from '@adonisjs/lucid/services/db'
+
+test.group.setup(async () => {
+  // Run migrations before tests
+  const { default: Migrator } = await import('@adonisjs/lucid/migrator')
+  const migrator = new Migrator(Database, Application, {
+    direction: 'up'
+  })
+  await migrator.run()
+})
+
+test.group.teardown(async () => {
+  await Database.manager.closeAll()
+})
+
+// Clean database before each test
+test.setup(async () => {
+  await Database.beginGlobalTransaction()
+})
+
+test.teardown(async () => {
+  await Database.rollbackGlobalTransaction()
+})
+```
+
+### Test Best Practices
+
+#### DO's
+
+```typescript
+// ✅ Use descriptive test names
+test('should create user with valid email and hashed password', async () => {})
+
+// ✅ Use factories for test data
+const user = await UserFactory.create()
+
+// ✅ Test edge cases
+test('should handle empty request body', async () => {})
+test('should handle malformed JSON', async () => {})
+
+// ✅ Use proper assertions
+response.assertStatus(201)
+response.assertBodyContains({ success: true })
+
+// ✅ Test error conditions
+await assert.rejects(() => service.method(), 'Expected error message')
+
+// ✅ Clean test data
+test.teardown(async () => {
+  await Database.truncate('users')
+})
+```
+
+#### DON'Ts
+
+```typescript
+// ❌ Vague test names
+test('user test', async () => {})
+
+// ❌ Testing implementation details
+assert.equal(user.hashedPassword.length, 60) // Testing bcrypt hash length
+
+// ❌ Hardcoded test data
+const user = { id: 1, email: 'test@test.com' }
+
+// ❌ Not testing error cases
+// Only testing happy path
+
+// ❌ Interdependent tests
+test('first test', async () => {
+  global.userId = user.id // Don't share state
+})
+```
+
+### Running Tests
+
+```bash
+# ✅ Run all tests
+node ace test
+
+# ✅ Run specific test file
+node ace test tests/unit/models/user.spec.ts
+
+# ✅ Run tests with coverage
+node ace test --coverage
+
+# ✅ Run tests in watch mode
+node ace test --watch
+
+# ✅ Run only unit tests
+node ace test tests/unit/**/*.spec.ts
+
+# ✅ Run tests with specific reporter
+node ace test --reporter=json
+```
+
+### Sources
+
+- [Testing Documentation](https://docs.adonisjs.com/guides/testing)
+- [Japa Testing Framework](https://japa.dev)
+- [Model Factories](https://docs.adonisjs.com/guides/database#model-factories)
+- [HTTP Testing](https://japa.dev/docs/plugins/api-client)
+````
+### adonisjs:validation
+Guidelines for VineJS validation in AdonisJS 6
+````mdx
+## VineJS Validation
+
+### Validator Structure
+
+Validators MUST be placed in `app/validators/` and follow these patterns:
+
+#### Basic Validator Structure
+
+```typescript
+// app/validators/user_validator.ts
+import vine from '@vinejs/vine'
+
+// ✅ Correct: Create user validation schema
+export const createUserValidator = vine.compile(
+  vine.object({
+    email: vine.string().email().normalizeEmail(),
+    password: vine.string().minLength(8).maxLength(32).confirmed(),
+    fullName: vine.string().minLength(2).maxLength(100),
+    dateOfBirth: vine.date().beforeOrEqual('today'),
+    role: vine.enum(['user', 'admin', 'moderator']).optional()
+  })
+)
+
+// ✅ Correct: Update user validation schema
+export const updateUserValidator = vine.compile(
+  vine.object({
+    email: vine.string().email().normalizeEmail().optional(),
+    fullName: vine.string().minLength(2).maxLength(100).optional(),
+    dateOfBirth: vine.date().beforeOrEqual('today').optional(),
+    role: vine.enum(['user', 'admin', 'moderator']).optional()
+  })
+)
+
+// ✅ Correct: Login validation schema
+export const loginValidator = vine.compile(
+  vine.object({
+    email: vine.string().email().normalizeEmail(),
+    password: vine.string().minLength(1),
+    rememberMe: vine.boolean().optional()
+  })
+)
+```
+
+#### Post Validator Patterns
+
+```typescript
+// app/validators/post_validator.ts
+import vine from '@vinejs/vine'
+
+// ✅ Correct: Basic post validation
+export const createPostValidator = vine.compile(
+  vine.object({
+    title: vine.string().minLength(5).maxLength(200),
+    content: vine.string().minLength(10),
+    slug: vine.string().regex(/^[a-z0-9-]+$/),
+    categoryId: vine.number().positive(),
+    tags: vine.array(vine.string()).minLength(1).maxLength(5),
+    publishedAt: vine.date().optional(),
+    featuredImage: vine.file({
+      size: '2mb',
+      extnames: ['jpg', 'jpeg', 'png']
+    }).optional()
+  })
+)
+
+// ✅ Correct: Update post validation
+export const updatePostValidator = vine.compile(
+  vine.object({
+    title: vine.string().minLength(5).maxLength(200).optional(),
+    content: vine.string().minLength(10).optional(),
+    slug: vine.string().regex(/^[a-z0-9-]+$/).optional(),
+    categoryId: vine.number().positive().optional(),
+    tags: vine.array(vine.string()).optional(),
+    status: vine.enum(['draft', 'published']).optional()
+  })
+)
+```
+
+### Using Validators in Controllers
+
+```typescript
+// app/controllers/users_controller.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import { createUserValidator, updateUserValidator } from '#validators/user_validator'
+import User from '#models/user'
+
+export default class UsersController {
+  // ✅ Correct: Validate request data
+  async store({ request, response }: HttpContext) {
+    try {
+      const data = await request.validateUsing(createUserValidator)
+      const user = await User.create(data)
+      return response.status(201).json({ data: user })
+    } catch (error) {
+      if (error.code === 'E_VALIDATION_ERROR') {
+        return response.badRequest({
+          error: 'Validation failed',
+          messages: error.messages
+        })
+      }
+      throw error
+    }
+  }
+
+  // ✅ Correct: Validate with existing data check
+  async update({ params, request, response }: HttpContext) {
+    const user = await User.findOrFail(params.id)
+    const data = await request.validateUsing(updateUserValidator)
+    
+    await user.merge(data).save()
+    return response.json({ data: user })
+  }
+
+  // ✅ Correct: Manual validation
+  async manualValidation({ request, response }: HttpContext) {
+    try {
+      const data = await vine.validate({
+        schema: createUserValidator,
+        data: request.all()
+      })
+      
+      // Process validated data
+      const user = await User.create(data)
+      return response.json({ data: user })
+    } catch (error) {
+      return response.badRequest({
+        error: 'Validation failed',
+        messages: error.messages
+      })
+    }
+  }
+}
+```
+
+### Common Validation Rules
+
+```typescript
+// app/validators/example_validator.ts
+import vine from '@vinejs/vine'
+
+export const exampleValidator = vine.compile(
+  vine.object({
+    // ✅ String validations
+    email: vine.string().email().normalizeEmail(),
+    username: vine.string().minLength(3).maxLength(20),
+    url: vine.string().url(),
+    
+    // ✅ Number validations
+    age: vine.number().range([18, 100]),
+    price: vine.number().positive(),
+    quantity: vine.number().positive(),
+    
+    // ✅ Date validations
+    birthDate: vine.date().beforeOrEqual('today'),
+    startDate: vine.date(),
+    endDate: vine.date().afterField('startDate'),
+    
+    // ✅ Boolean validations
+    isActive: vine.boolean(),
+    agreeToTerms: vine.boolean().isTrue(),
+    
+    // ✅ Array validations
+    tags: vine.array(vine.string()).minLength(1).maxLength(5),
+    categoryIds: vine.array(vine.number().positive()),
+    
+    // ✅ File validations
+    avatar: vine.file({
+      size: '2mb',
+      extnames: ['jpg', 'jpeg', 'png']
+    }),
+    
+    // ✅ Nested object validations
+    address: vine.object({
+      street: vine.string().minLength(5),
+      city: vine.string().minLength(2),
+      postalCode: vine.string()
+    }),
+    
+    // ✅ Enums
+    status: vine.enum(['active', 'inactive']).optional(),
+    theme: vine.enum(['light', 'dark']).optional()
+  })
+)
+```
+
+### Custom Validation Rules
+
+```typescript
+// app/validators/custom_rules.ts
+import vine from '@vinejs/vine'
+import User from '#models/user'
+
+// ✅ Correct: Custom unique validation
+const uniqueEmail = vine.createRule(async (value, options, field) => {
+  if (typeof value !== 'string') {
+    return
+  }
+
+  const user = await User.findBy('email', value)
+  if (user) {
+    field.report('The {{ field }} field is not unique', 'unique', field)
+  }
+})
+
+// ✅ Usage of custom rules
+export const userRegistrationValidator = vine.compile(
+  vine.object({
+    email: vine.string().email().use(uniqueEmail()),
+    password: vine.string().minLength(8),
+    passwordConfirmation: vine.string()
+  })
+)
+```
+
+### Validation Error Handling
+
+```typescript
+// app/exceptions/validation_exception_handler.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import { Exception } from '@adonisjs/core/exceptions'
+
+export default class ValidationExceptionHandler {
+  // ✅ Correct: Handle validation errors globally
+  async handle(error: any, ctx: HttpContext) {
+    if (error.code === 'E_VALIDATION_ERROR') {
+      return ctx.response.status(422).json({
+        error: 'Validation failed',
+        messages: error.messages,
+        fields: this.formatErrors(error.messages)
+      })
+    }
+
+    // Handle other exceptions
+    return ctx.response.status(500).json({
+      error: 'Internal server error'
+    })
+  }
+
+  private formatErrors(messages: any[]) {
+    return messages.reduce((acc, message) => {
+      acc[message.field] = message.message
+      return acc
+    }, {})
+  }
+}
+```
+
+### Validation Middleware
+
+```typescript
+// app/middleware/validate_middleware.ts
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import vine from '@vinejs/vine'
+
+export default class ValidateMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: { validator: any }
+  ) {
+    try {
+      const validatedData = await ctx.request.validateUsing(options.validator)
+      ctx.validatedData = validatedData
+    } catch (error) {
+      return ctx.response.badRequest({
+        error: 'Validation failed',
+        messages: error.messages
+      })
+    }
+
+    return await next()
+  }
+}
+
+// Usage in routes
+router.post('users', '#controllers/users_controller.store')
+  .middleware([
+    middleware.validate({ validator: createUserValidator })
+  ])
+```
+
+### Testing Validators
+
+```typescript
+// tests/unit/validators/user_validator.spec.ts
+import { test } from '@japa/runner'
+import vine from '@vinejs/vine'
+import { createUserValidator } from '#validators/user_validator'
+
+test.group('User Validator', () => {
+  test('should validate correct user data', async ({ assert }) => {
+    const data = {
+      email: 'test@example.com',
+      password: 'SecurePass123!',
+      passwordConfirmation: 'SecurePass123!',
+      fullName: 'John Doe',
+      dateOfBirth: '1990-01-01'
+    }
+
+    const result = await vine.validate({
+      schema: createUserValidator,
+      data
+    })
+
+    assert.properties(result, ['email', 'password', 'fullName', 'dateOfBirth'])
+    assert.equal(result.email, 'test@example.com')
+  })
+
+  test('should fail with invalid email', async ({ assert }) => {
+    const data = {
+      email: 'invalid-email',
+      password: 'SecurePass123!',
+      passwordConfirmation: 'SecurePass123!',
+      fullName: 'John Doe'
+    }
+
+    try {
+      await vine.validate({
+        schema: createUserValidator,
+        data
+      })
+      assert.fail('Should have thrown validation error')
+    } catch (error) {
+      assert.equal(error.code, 'E_VALIDATION_ERROR')
+      assert.isTrue(error.messages.some((msg: any) => 
+        msg.field === 'email' && msg.rule === 'email'
+      ))
+    }
+  })
+})
+```
+
+### Validation Best Practices
+
+#### DO's
+
+```typescript
+// ✅ Correct: Use descriptive validator names
+export const createUserValidator = vine.compile(...)
+export const updateUserValidator = vine.compile(...)
+export const loginValidator = vine.compile(...)
+
+// ✅ Correct: Normalize data
+email: vine.string().email().normalizeEmail(),
+url: vine.string().url().normalizeUrl(),
+
+// ✅ Correct: Use appropriate rules
+password: vine.string().minLength(8).maxLength(32).confirmed(),
+age: vine.number().range([18, 100]),
+
+// ✅ Correct: Handle file uploads
+avatar: vine.file({
+  size: '2mb',
+  extnames: ['jpg', 'jpeg', 'png']
+})
+
+// ✅ Correct: Use conditional validation
+companyName: vine.string().requiredWhen('userType', '=', 'business')
+```
+
+#### DON'Ts
+
+```typescript
+// ❌ Incorrect: Generic validator names
+export const validator1 = vine.compile(...)
+export const userValidator = vine.compile(...) // Too generic
+
+// ❌ Incorrect: Not using appropriate rules
+email: vine.string(), // Should use .email()
+age: vine.string(),   // Should use .number()
+
+// ❌ Incorrect: Not handling optional fields
+export const updateValidator = vine.compile(
+  vine.object({
+    email: vine.string().email(), // Should be optional for updates
+    name: vine.string()           // Should be optional for updates
+  })
+)
+
+// ❌ Incorrect: Not validating file uploads
+file: vine.string() // Should use vine.file()
+
+// ❌ Incorrect: Not using enum for fixed values
+status: vine.string() // Should use vine.enum(['active', 'inactive'])
+```
+
+### Common Validation Patterns
+
+```typescript
+// ✅ Pagination validation
+export const paginationValidator = vine.compile(
+  vine.object({
+    page: vine.number().positive().optional(),
+    limit: vine.number().range([1, 100]).optional(),
+    sortBy: vine.string().optional(),
+    sortOrder: vine.enum(['asc', 'desc']).optional()
+  })
+)
+
+// ✅ Search validation
+export const searchValidator = vine.compile(
+  vine.object({
+    query: vine.string().minLength(2).maxLength(100),
+    category: vine.string().optional()
+  })
+)
+
+// ✅ Bulk operations validation
+export const bulkUpdateValidator = vine.compile(
+  vine.object({
+    ids: vine.array(vine.number().positive()).minLength(1).maxLength(100),
+    action: vine.enum(['activate', 'deactivate', 'delete'])
+  })
+)
+```
+
+### Sources
+
+- [VineJS Documentation](https://vinejs.dev)
+- [Validation Rules](https://vinejs.dev/docs/validation_rules)
+- [Custom Rules](https://vinejs.dev/docs/custom_rules)
+- [AdonisJS Validation](https://docs.adonisjs.com/guides/validation)
+````

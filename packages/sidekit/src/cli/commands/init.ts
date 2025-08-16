@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import color from "picocolors";
 import { steps } from "../steps.js";
-import { initSidekit } from "../../sidekit/init_sidekit.js";
+import { initSidekit } from "@sidekit/core";
 
 export default defineCommand({
   meta: {

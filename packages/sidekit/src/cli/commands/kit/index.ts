@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { intro, log } from "@clack/prompts";
 import color from "picocolors";
-import { indexKit } from "../../../kit/index_kit.js";
+import { indexKit } from "@sidekit/core/kit";
 import { GlobalArgs } from "../../args.js";
 
 export default defineCommand({

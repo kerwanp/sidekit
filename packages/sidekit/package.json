@@ -1,6 +1,22 @@
 {
   "name": "sidekit",
   "type": "module",
+  "version": "0.0.0-alpha.3",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kerwanp/sidekit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kerwanp/sidekit/issues"
+  },
+  "homepage": "https://github.com/kerwanp/sidekit",
+  "files": [
+    "build",
+    "!build/tests",
+    "!build/bin/schemas*",
+    "!build/bin/registry*",
+    "!build/bin/test*"
+  ],
   "scripts": {
     "build": "tsc",
     "lint": "eslint .",
@@ -13,7 +29,7 @@
   },
   "bin": "./build/bin/sidekit.js",
   "exports": {
-    "./kit": "./build/src/kit.js"
+    "./kit": "./build/src/kit/index.js"
   },
   "devDependencies": {
     "@adonisjs/eslint-config": "^2.1.2",
@@ -35,6 +51,9 @@
   "packageManager": "yarn@4.9.2",
   "dependencies": {
     "@clack/prompts": "^0.11.0",
+    "@sidekit/core": "workspace:*",
+    "@sidekit/mcp": "workspace:*",
+    "@sidekit/search": "workspace:*",
     "citty": "^0.1.6",
     "effect": "^3.17.7",
     "front-matter": "^4.0.2",
@@ -43,5 +62,17 @@
     "picocolors": "^1.1.1",
     "prettier": "^3.6.2",
     "zod": "^4.0.17"
+  },
+  "keywords": [
+    "cli",
+    "ai",
+    "cursor",
+    "opencode",
+    "claude",
+    "copilot"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
   }
 }

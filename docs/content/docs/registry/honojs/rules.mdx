@@ -1,0 +1,6446 @@
+---
+title: Rules
+description: Hono.js rules
+---
+
+## Presets
+### honojs:minimal
+- [honojs:honojs:structure](#honojshonojs:structure)
+- [honojs:honojs:routing](#honojshonojs:routing)
+- [honojs:honojs:error-handling](#honojshonojs:error-handling)
+### honojs:recommended
+- [honojs:honojs:structure](#honojshonojs:structure)
+- [honojs:honojs:routing](#honojshonojs:routing)
+- [honojs:honojs:middleware](#honojshonojs:middleware)
+- [honojs:honojs:validation](#honojshonojs:validation)
+- [honojs:honojs:error-handling](#honojshonojs:error-handling)
+- [honojs:honojs:typescript](#honojshonojs:typescript)
+### honojs:full-stack
+- [honojs:honojs:structure](#honojshonojs:structure)
+- [honojs:honojs:routing](#honojshonojs:routing)
+- [honojs:honojs:middleware](#honojshonojs:middleware)
+- [honojs:honojs:validation](#honojshonojs:validation)
+- [honojs:honojs:error-handling](#honojshonojs:error-handling)
+- [honojs:honojs:typescript](#honojshonojs:typescript)
+- [honojs:honojs:rpc](#honojshonojs:rpc)
+- [honojs:honojs:database](#honojshonojs:database)
+- [honojs:honojs:authentication](#honojshonojs:authentication)
+- [honojs:honojs:testing](#honojshonojs:testing)
+### honojs:api
+- [honojs:honojs:routing](#honojshonojs:routing)
+- [honojs:honojs:validation](#honojshonojs:validation)
+- [honojs:honojs:error-handling](#honojshonojs:error-handling)
+- [honojs:honojs:security](#honojshonojs:security)
+- [honojs:honojs:authentication](#honojshonojs:authentication)
+- [honojs:honojs:performance](#honojshonojs:performance)
+### honojs:edge
+- [honojs:honojs:structure](#honojshonojs:structure)
+- [honojs:honojs:routing](#honojshonojs:routing)
+- [honojs:honojs:middleware](#honojshonojs:middleware)
+- [honojs:honojs:performance](#honojshonojs:performance)
+- [honojs:honojs:deployment](#honojshonojs:deployment)
+## Rules
+### honojs:authentication
+Authentication strategies and implementation
+````mdx
+## Authentication
+
+### Rules
+
+- Passwords MUST be hashed using bcrypt or similar secure algorithms
+- JWT tokens MUST have appropriate expiration times
+- Refresh tokens MUST be implemented for long-lived sessions
+- Session data MUST be stored securely
+- Authentication middleware MUST be applied to protected routes
+- Rate limiting MUST be implemented for authentication endpoints
+- Multi-factor authentication SHOULD be supported for sensitive applications
+- Authentication state MUST be properly managed across requests
+- Logout functionality MUST invalidate tokens/sessions
+
+### JWT Authentication
+
+```typescript
+// src/lib/auth.ts
+import { sign, verify } from 'hono/jwt'
+import bcrypt from 'bcryptjs'
+import { HTTPException } from 'hono/http-exception'
+
+export interface JWTPayload {
+  sub: string
+  email: string
+  role: string
+  iat: number
+  exp: number
+}
+
+export interface RefreshTokenPayload {
+  sub: string
+  tokenType: 'refresh'
+  iat: number
+  exp: number
+}
+
+export const authConfig = {
+  jwtSecret: process.env.JWT_SECRET!,
+  jwtExpiration: '15m',
+  refreshTokenExpiration: '7d',
+  saltRounds: 12
+}
+
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, authConfig.saltRounds)
+}
+
+export async function verifyPassword(
+  password: string, 
+  hash: string
+): Promise<boolean> {
+  return bcrypt.compare(password, hash)
+}
+
+export async function generateTokens(user: { id: string; email: string; role: string }) {
+  const now = Math.floor(Date.now() / 1000)
+  
+  const accessToken = await sign(
+    {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      iat: now,
+      exp: now + 15 * 60 // 15 minutes
+    },
+    authConfig.jwtSecret
+  )
+  
+  const refreshToken = await sign(
+    {
+      sub: user.id,
+      tokenType: 'refresh',
+      iat: now,
+      exp: now + 7 * 24 * 60 * 60 // 7 days
+    },
+    authConfig.jwtSecret
+  )
+  
+  return { accessToken, refreshToken }
+}
+
+export async function verifyAccessToken(token: string): Promise<JWTPayload> {
+  try {
+    const payload = await verify(token, authConfig.jwtSecret) as JWTPayload
+    return payload
+  } catch (error) {
+    throw new HTTPException(401, { message: 'Invalid or expired token' })
+  }
+}
+
+export async function verifyRefreshToken(token: string): Promise<RefreshTokenPayload> {
+  try {
+    const payload = await verify(token, authConfig.jwtSecret) as RefreshTokenPayload
+    
+    if (payload.tokenType !== 'refresh') {
+      throw new Error('Invalid token type')
+    }
+    
+    return payload
+  } catch (error) {
+    throw new HTTPException(401, { message: 'Invalid refresh token' })
+  }
+}
+```
+
+### Authentication Middleware
+
+```typescript
+// src/middleware/auth.ts
+import { Context, Next } from 'hono'
+import { HTTPException } from 'hono/http-exception'
+import { verifyAccessToken } from '../lib/auth'
+import { userRepository } from '../lib/db'
+
+export const authMiddleware = async (c: Context, next: Next) => {
+  const authHeader = c.req.header('Authorization')
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new HTTPException(401, { message: 'Missing or invalid authorization header' })
+  }
+  
+  const token = authHeader.substring(7)
+  
+  try {
+    const payload = await verifyAccessToken(token)
+    
+    // Optional: Verify user still exists
+    const user = await userRepository.findById(payload.sub)
+    if (!user) {
+      throw new HTTPException(401, { message: 'User not found' })
+    }
+    
+    // Add user data to context
+    c.set('userId', payload.sub)
+    c.set('userEmail', payload.email)
+    c.set('userRole', payload.role)
+    c.set('user', user)
+    
+    await next()
+  } catch (error) {
+    if (error instanceof HTTPException) throw error
+    throw new HTTPException(401, { message: 'Invalid token' })
+  }
+}
+
+// Role-based authorization middleware
+export const requireRole = (role: string) => {
+  return async (c: Context, next: Next) => {
+    const userRole = c.get('userRole')
+    
+    if (userRole !== role) {
+      throw new HTTPException(403, { 
+        message: `Insufficient permissions. Required role: ${role}` 
+      })
+    }
+    
+    await next()
+  }
+}
+
+// Multiple roles authorization
+export const requireAnyRole = (roles: string[]) => {
+  return async (c: Context, next: Next) => {
+    const userRole = c.get('userRole')
+    
+    if (!roles.includes(userRole)) {
+      throw new HTTPException(403, {
+        message: `Insufficient permissions. Required roles: ${roles.join(', ')}`
+      })
+    }
+    
+    await next()
+  }
+}
+
+// Optional authentication (for public endpoints that show different data for authenticated users)
+export const optionalAuth = async (c: Context, next: Next) => {
+  const authHeader = c.req.header('Authorization')
+  
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7)
+    
+    try {
+      const payload = await verifyAccessToken(token)
+      const user = await userRepository.findById(payload.sub)
+      
+      if (user) {
+        c.set('userId', payload.sub)
+        c.set('userEmail', payload.email)
+        c.set('userRole', payload.role)
+        c.set('user', user)
+      }
+    } catch (error) {
+      // Ignore authentication errors for optional auth
+    }
+  }
+  
+  await next()
+}
+```
+
+### Authentication Routes
+
+```typescript
+// src/routes/auth.ts
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+import { HTTPException } from 'hono/http-exception'
+import { 
+  hashPassword, 
+  verifyPassword, 
+  generateTokens, 
+  verifyRefreshToken 
+} from '../lib/auth'
+import { userRepository } from '../lib/db'
+import { authMiddleware } from '../middleware/auth'
+
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8).max(100),
+  name: z.string().min(1).max(100)
+})
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1)
+})
+
+const refreshTokenSchema = z.object({
+  refreshToken: z.string()
+})
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string(),
+  newPassword: z.string().min(8).max(100)
+})
+
+const auth = new Hono()
+
+// Register
+auth.post('/register',
+  zValidator('json', registerSchema),
+  async (c) => {
+    const { email, password, name } = c.req.valid('json')
+    
+    // Check if user already exists
+    const existingUser = await userRepository.findByEmail(email)
+    if (existingUser) {
+      throw new HTTPException(400, { message: 'User already exists' })
+    }
+    
+    // Hash password and create user
+    const passwordHash = await hashPassword(password)
+    const user = await userRepository.create({
+      email,
+      name,
+      passwordHash
+    })
+    
+    // Generate tokens
+    const { accessToken, refreshToken } = await generateTokens(user)
+    
+    return c.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      },
+      accessToken,
+      refreshToken
+    }, 201)
+  }
+)
+
+// Login
+auth.post('/login',
+  zValidator('json', loginSchema),
+  async (c) => {
+    const { email, password } = c.req.valid('json')
+    
+    // Find user
+    const user = await userRepository.findByEmail(email)
+    if (!user) {
+      throw new HTTPException(401, { message: 'Invalid credentials' })
+    }
+    
+    // Verify password
+    const isValidPassword = await verifyPassword(password, user.passwordHash)
+    if (!isValidPassword) {
+      throw new HTTPException(401, { message: 'Invalid credentials' })
+    }
+    
+    // Generate tokens
+    const { accessToken, refreshToken } = await generateTokens(user)
+    
+    return c.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      },
+      accessToken,
+      refreshToken
+    })
+  }
+)
+
+// Refresh token
+auth.post('/refresh',
+  zValidator('json', refreshTokenSchema),
+  async (c) => {
+    const { refreshToken } = c.req.valid('json')
+    
+    try {
+      const payload = await verifyRefreshToken(refreshToken)
+      
+      // Get current user data
+      const user = await userRepository.findById(payload.sub)
+      if (!user) {
+        throw new HTTPException(401, { message: 'User not found' })
+      }
+      
+      // Generate new tokens
+      const tokens = await generateTokens(user)
+      
+      return c.json(tokens)
+    } catch (error) {
+      throw new HTTPException(401, { message: 'Invalid refresh token' })
+    }
+  }
+)
+
+// Get current user
+auth.get('/me', authMiddleware, async (c) => {
+  const user = c.get('user')
+  
+  return c.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      emailVerified: user.emailVerified,
+      createdAt: user.createdAt
+    }
+  })
+})
+
+// Update profile
+auth.put('/me',
+  authMiddleware,
+  zValidator('json', z.object({
+    name: z.string().min(1).max(100).optional(),
+    email: z.string().email().optional()
+  })),
+  async (c) => {
+    const userId = c.get('userId')
+    const updates = c.req.valid('json')
+    
+    // Check if email is already taken
+    if (updates.email) {
+      const existingUser = await userRepository.findByEmail(updates.email)
+      if (existingUser && existingUser.id !== userId) {
+        throw new HTTPException(400, { message: 'Email already taken' })
+      }
+    }
+    
+    const updatedUser = await userRepository.update(userId, updates)
+    if (!updatedUser) {
+      throw new HTTPException(404, { message: 'User not found' })
+    }
+    
+    return c.json({
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: updatedUser.role
+      }
+    })
+  }
+)
+
+// Change password
+auth.put('/change-password',
+  authMiddleware,
+  zValidator('json', changePasswordSchema),
+  async (c) => {
+    const userId = c.get('userId')
+    const { currentPassword, newPassword } = c.req.valid('json')
+    
+    const user = await userRepository.findById(userId)
+    if (!user) {
+      throw new HTTPException(404, { message: 'User not found' })
+    }
+    
+    // Verify current password
+    const isValidPassword = await verifyPassword(currentPassword, user.passwordHash)
+    if (!isValidPassword) {
+      throw new HTTPException(400, { message: 'Current password is incorrect' })
+    }
+    
+    // Hash and update new password
+    const passwordHash = await hashPassword(newPassword)
+    await userRepository.update(userId, { passwordHash })
+    
+    return c.json({ message: 'Password updated successfully' })
+  }
+)
+
+// Logout (when using token blacklisting)
+auth.post('/logout', authMiddleware, async (c) => {
+  // In a real implementation, you would blacklist the token
+  // or remove it from a whitelist/session store
+  
+  return c.json({ message: 'Logged out successfully' })
+})
+
+export default auth
+```
+
+### Session-Based Authentication
+
+```typescript
+// src/lib/session.ts
+interface Session {
+  id: string
+  userId: string
+  expiresAt: Date
+  createdAt: Date
+}
+
+// In-memory session store (use Redis in production)
+const sessions = new Map<string, Session>()
+
+export async function createSession(userId: string): Promise<string> {
+  const sessionId = crypto.randomUUID()
+  const session: Session = {
+    id: sessionId,
+    userId,
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+    createdAt: new Date()
+  }
+  
+  sessions.set(sessionId, session)
+  return sessionId
+}
+
+export async function getSession(sessionId: string): Promise<Session | null> {
+  const session = sessions.get(sessionId)
+  
+  if (!session) return null
+  
+  if (session.expiresAt < new Date()) {
+    sessions.delete(sessionId)
+    return null
+  }
+  
+  return session
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  sessions.delete(sessionId)
+}
+
+// Session middleware
+export const sessionMiddleware = async (c: Context, next: Next) => {
+  const sessionId = c.req.header('X-Session-ID') || 
+                   c.req.cookie('sessionId')
+  
+  if (!sessionId) {
+    throw new HTTPException(401, { message: 'No session provided' })
+  }
+  
+  const session = await getSession(sessionId)
+  if (!session) {
+    throw new HTTPException(401, { message: 'Invalid or expired session' })
+  }
+  
+  const user = await userRepository.findById(session.userId)
+  if (!user) {
+    throw new HTTPException(401, { message: 'User not found' })
+  }
+  
+  c.set('sessionId', sessionId)
+  c.set('userId', user.id)
+  c.set('user', user)
+  
+  await next()
+}
+```
+
+### OAuth Integration
+
+```typescript
+// src/lib/oauth.ts
+import { Hono } from 'hono'
+
+const oauth = new Hono()
+
+// Google OAuth
+oauth.get('/google', async (c) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI
+  const scope = 'openid email profile'
+  
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  authUrl.searchParams.set('client_id', clientId)
+  authUrl.searchParams.set('redirect_uri', redirectUri)
+  authUrl.searchParams.set('scope', scope)
+  authUrl.searchParams.set('response_type', 'code')
+  authUrl.searchParams.set('state', crypto.randomUUID())
+  
+  return c.redirect(authUrl.toString())
+})
+
+oauth.get('/google/callback', async (c) => {
+  const code = c.req.query('code')
+  const state = c.req.query('state')
+  
+  if (!code) {
+    throw new HTTPException(400, { message: 'Authorization code missing' })
+  }
+  
+  try {
+    // Exchange code for tokens
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI!
+      })
+    })
+    
+    const tokens = await tokenResponse.json()
+    
+    // Get user info
+    const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` }
+    })
+    
+    const googleUser = await userResponse.json()
+    
+    // Find or create user
+    let user = await userRepository.findByEmail(googleUser.email)
+    
+    if (!user) {
+      user = await userRepository.create({
+        email: googleUser.email,
+        name: googleUser.name,
+        passwordHash: '', // OAuth users don't have passwords
+        emailVerified: true
+      })
+    }
+    
+    // Generate JWT tokens
+    const { accessToken, refreshToken } = await generateTokens(user)
+    
+    return c.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      },
+      accessToken,
+      refreshToken
+    })
+    
+  } catch (error) {
+    throw new HTTPException(500, { message: 'OAuth authentication failed' })
+  }
+})
+
+export default oauth
+```
+
+### Multi-Factor Authentication
+
+```typescript
+// src/lib/mfa.ts
+import { authenticator } from 'otplib'
+import QRCode from 'qrcode'
+
+export async function generateMFASecret(email: string): Promise<{
+  secret: string
+  qrCodeUrl: string
+}> {
+  const secret = authenticator.generateSecret()
+  const service = 'Your App Name'
+  
+  const otpauth = authenticator.keyuri(email, service, secret)
+  const qrCodeUrl = await QRCode.toDataURL(otpauth)
+  
+  return { secret, qrCodeUrl }
+}
+
+export function verifyMFAToken(token: string, secret: string): boolean {
+  return authenticator.verify({ token, secret })
+}
+
+// MFA routes
+auth.post('/mfa/setup',
+  authMiddleware,
+  async (c) => {
+    const user = c.get('user')
+    
+    if (user.mfaEnabled) {
+      throw new HTTPException(400, { message: 'MFA already enabled' })
+    }
+    
+    const { secret, qrCodeUrl } = await generateMFASecret(user.email)
+    
+    // Store secret temporarily (should be confirmed before enabling)
+    await userRepository.update(user.id, { mfaSecret: secret })
+    
+    return c.json({ qrCodeUrl, secret })
+  }
+)
+
+auth.post('/mfa/verify',
+  authMiddleware,
+  zValidator('json', z.object({ token: z.string().length(6) })),
+  async (c) => {
+    const { token } = c.req.valid('json')
+    const user = c.get('user')
+    
+    if (!user.mfaSecret) {
+      throw new HTTPException(400, { message: 'MFA not set up' })
+    }
+    
+    const isValid = verifyMFAToken(token, user.mfaSecret)
+    
+    if (!isValid) {
+      throw new HTTPException(400, { message: 'Invalid MFA token' })
+    }
+    
+    // Enable MFA
+    await userRepository.update(user.id, { mfaEnabled: true })
+    
+    return c.json({ message: 'MFA enabled successfully' })
+  }
+)
+```
+
+### Sources
+
+- [JWT Documentation](https://hono.dev/docs/middleware/builtin/jwt)
+- [Basic Auth](https://hono.dev/docs/middleware/builtin/basic-auth)
+- [Bearer Auth](https://hono.dev/docs/middleware/builtin/bearer-auth)
+- [OAuth 2.0 Specification](https://oauth.net/2/)
+````
+### honojs:context
+Context handling and custom variables
+````mdx
+## Context
+
+### Rules
+
+- Context variables MUST be typed using TypeScript generics
+- Context variables SHOULD be set in middleware before being used in handlers
+- Context variable names MUST be descriptive and consistent
+- Context variables MUST NOT contain sensitive information that could leak
+- Context cleanup SHOULD be handled appropriately for long-running requests
+- Context variables SHOULD be documented for team understanding
+- Context inheritance MUST be properly managed in nested applications
+
+### Basic Context Usage
+
+```typescript
+// src/types/context.ts
+export type Variables = {
+  userId: string
+  user: User
+  requestId: string
+  startTime: number
+  db: Database
+  logger: Logger
+  ipAddress: string
+  userAgent: string
+}
+
+export type Bindings = {
+  DATABASE_URL: string
+  JWT_SECRET: string
+  REDIS_URL: string
+  API_KEY: string
+}
+
+// src/app.ts
+import { Hono } from 'hono'
+import type { Variables, Bindings } from './types/context'
+
+const app = new Hono<{
+  Variables: Variables
+  Bindings: Bindings
+}>()
+
+// Setting context variables in middleware
+app.use('*', async (c, next) => {
+  // Request tracking
+  c.set('requestId', crypto.randomUUID())
+  c.set('startTime', Date.now())
+  
+  // Extract client info
+  c.set('ipAddress', c.req.header('x-forwarded-for') || 'unknown')
+  c.set('userAgent', c.req.header('user-agent') || 'unknown')
+  
+  await next()
+})
+
+// Using context variables in handlers
+app.get('/profile', (c) => {
+  const userId = c.get('userId') // Fully typed
+  const user = c.get('user')     // Fully typed
+  const requestId = c.get('requestId')
+  
+  return c.json({
+    user,
+    meta: {
+      requestId,
+      timestamp: new Date().toISOString()
+    }
+  })
+})
+```
+
+### Request Lifecycle Context
+
+```typescript
+// src/middleware/request-context.ts
+import { Context, Next } from 'hono'
+import { randomUUID } from 'crypto'
+
+export interface RequestContext {
+  id: string
+  startTime: number
+  endTime?: number
+  duration?: number
+  method: string
+  path: string
+  statusCode?: number
+  userAgent: string
+  ipAddress: string
+  userId?: string
+}
+
+export const requestContextMiddleware = async (c: Context, next: Next) => {
+  const requestContext: RequestContext = {
+    id: randomUUID(),
+    startTime: Date.now(),
+    method: c.req.method,
+    path: c.req.path,
+    userAgent: c.req.header('user-agent') || 'unknown',
+    ipAddress: c.req.header('x-forwarded-for') || 
+               c.req.header('x-real-ip') || 
+               'unknown'
+  }
+  
+  c.set('requestContext', requestContext)
+  c.set('requestId', requestContext.id)
+  
+  // Add request ID to response headers
+  c.res.headers.set('X-Request-ID', requestContext.id)
+  
+  try {
+    await next()
+    
+    // Update context after request
+    requestContext.endTime = Date.now()
+    requestContext.duration = requestContext.endTime - requestContext.startTime
+    requestContext.statusCode = c.res.status
+    
+  } catch (error) {
+    requestContext.endTime = Date.now()
+    requestContext.duration = requestContext.endTime - requestContext.startTime
+    requestContext.statusCode = error instanceof HTTPException ? error.status : 500
+    
+    throw error
+  }
+}
+```
+
+### Database Context
+
+```typescript
+// src/middleware/database-context.ts
+import { Context, Next } from 'hono'
+import { Pool } from 'pg'
+import { createDatabase } from '../lib/database'
+
+export const databaseContextMiddleware = async (c: Context, next: Next) => {
+  const db = createDatabase(c.env.DATABASE_URL)
+  c.set('db', db)
+  
+  try {
+    await next()
+  } finally {
+    // Cleanup database connections
+    await db.close()
+  }
+}
+
+// Usage in handlers
+app.get('/users', async (c) => {
+  const db = c.get('db')
+  const users = await db.query('SELECT * FROM users')
+  return c.json({ users })
+})
+```
+
+### User Context with Caching
+
+```typescript
+// src/middleware/user-context.ts
+import { Context, Next } from 'hono'
+import { verifyAccessToken } from '../lib/auth'
+import { getUserById } from '../lib/user'
+
+const userCache = new Map<string, { user: User; expires: number }>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+export const userContextMiddleware = async (c: Context, next: Next) => {
+  const authHeader = c.req.header('Authorization')
+  
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7)
+    
+    try {
+      const payload = await verifyAccessToken(token)
+      const userId = payload.sub
+      
+      // Check cache first
+      const cached = userCache.get(userId)
+      if (cached && cached.expires > Date.now()) {
+        c.set('userId', userId)
+        c.set('user', cached.user)
+        c.set('userRole', cached.user.role)
+      } else {
+        // Fetch from database
+        const user = await getUserById(userId)
+        if (user) {
+          // Cache the user
+          userCache.set(userId, {
+            user,
+            expires: Date.now() + CACHE_TTL
+          })
+          
+          c.set('userId', userId)
+          c.set('user', user)
+          c.set('userRole', user.role)
+        }
+      }
+    } catch (error) {
+      // Invalid token - continue without user context
+    }
+  }
+  
+  await next()
+}
+
+// Clear cache entry when user is updated
+export function invalidateUserCache(userId: string) {
+  userCache.delete(userId)
+}
+```
+
+### Feature Flags Context
+
+```typescript
+// src/middleware/feature-flags.ts
+import { Context, Next } from 'hono'
+
+interface FeatureFlags {
+  newUI: boolean
+  betaFeatures: boolean
+  advancedAnalytics: boolean
+  experimentalAPI: boolean
+}
+
+export const featureFlagsMiddleware = async (c: Context, next: Next) => {
+  const userId = c.get('userId')
+  const userRole = c.get('userRole')
+  
+  // Determine feature flags based on user
+  const flags: FeatureFlags = {
+    newUI: await isFeatureEnabled('newUI', userId, userRole),
+    betaFeatures: userRole === 'admin' || userRole === 'beta',
+    advancedAnalytics: userRole === 'admin',
+    experimentalAPI: process.env.NODE_ENV === 'development'
+  }
+  
+  c.set('featureFlags', flags)
+  await next()
+}
+
+async function isFeatureEnabled(
+  feature: string, 
+  userId?: string, 
+  userRole?: string
+): Promise<boolean> {
+  // Check external feature flag service
+  // For now, return simple logic
+  if (userRole === 'admin') return true
+  if (feature === 'newUI' && Math.random() > 0.5) return true
+  return false
+}
+
+// Usage in handlers
+app.get('/dashboard', (c) => {
+  const flags = c.get('featureFlags')
+  
+  return c.json({
+    dashboard: {
+      useNewUI: flags.newUI,
+      showBetaFeatures: flags.betaFeatures,
+      showAnalytics: flags.advancedAnalytics
+    }
+  })
+})
+```
+
+### Logging Context
+
+```typescript
+// src/middleware/logging-context.ts
+import { Context, Next } from 'hono'
+
+export interface Logger {
+  info: (message: string, meta?: any) => void
+  warn: (message: string, meta?: any) => void
+  error: (message: string, meta?: any) => void
+  debug: (message: string, meta?: any) => void
+}
+
+export const loggingContextMiddleware = async (c: Context, next: Next) => {
+  const requestId = c.get('requestId')
+  const userId = c.get('userId')
+  
+  const logger: Logger = {
+    info: (message, meta = {}) => {
+      console.log(JSON.stringify({
+        level: 'info',
+        message,
+        requestId,
+        userId,
+        timestamp: new Date().toISOString(),
+        ...meta
+      }))
+    },
+    
+    warn: (message, meta = {}) => {
+      console.warn(JSON.stringify({
+        level: 'warn',
+        message,
+        requestId,
+        userId,
+        timestamp: new Date().toISOString(),
+        ...meta
+      }))
+    },
+    
+    error: (message, meta = {}) => {
+      console.error(JSON.stringify({
+        level: 'error',
+        message,
+        requestId,
+        userId,
+        timestamp: new Date().toISOString(),
+        ...meta
+      }))
+    },
+    
+    debug: (message, meta = {}) => {
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.debug(JSON.stringify({
+          level: 'debug',
+          message,
+          requestId,
+          userId,
+          timestamp: new Date().toISOString(),
+          ...meta
+        }))
+      }
+    }
+  }
+  
+  c.set('logger', logger)
+  await next()
+}
+
+// Usage in handlers
+app.post('/users', async (c) => {
+  const logger = c.get('logger')
+  const userData = await c.req.json()
+  
+  logger.info('Creating new user', { email: userData.email })
+  
+  try {
+    const user = await createUser(userData)
+    logger.info('User created successfully', { userId: user.id })
+    return c.json({ user }, 201)
+  } catch (error) {
+    logger.error('Failed to create user', { error: error.message })
+    throw error
+  }
+})
+```
+
+### Multi-Tenant Context
+
+```typescript
+// src/middleware/tenant-context.ts
+import { Context, Next } from 'hono'
+import { HTTPException } from 'hono/http-exception'
+
+interface Tenant {
+  id: string
+  name: string
+  subdomain: string
+  settings: {
+    features: string[]
+    limits: {
+      users: number
+      storage: number
+    }
+  }
+}
+
+export const tenantContextMiddleware = async (c: Context, next: Next) => {
+  // Extract tenant from subdomain or header
+  const host = c.req.header('host') || ''
+  const tenantHeader = c.req.header('x-tenant-id')
+  
+  let tenantId: string | null = null
+  
+  if (tenantHeader) {
+    tenantId = tenantHeader
+  } else {
+    // Extract from subdomain (e.g., tenant1.myapp.com)
+    const subdomain = host.split('.')[0]
+    if (subdomain && subdomain !== 'www' && subdomain !== 'api') {
+      tenantId = subdomain
+    }
+  }
+  
+  if (!tenantId) {
+    throw new HTTPException(400, { message: 'Tenant not specified' })
+  }
+  
+  // Load tenant configuration
+  const tenant = await getTenantById(tenantId)
+  if (!tenant) {
+    throw new HTTPException(404, { message: 'Tenant not found' })
+  }
+  
+  c.set('tenant', tenant)
+  c.set('tenantId', tenant.id)
+  
+  await next()
+}
+
+async function getTenantById(id: string): Promise<Tenant | null> {
+  // Implementation to fetch tenant from database
+  // This is a mock implementation
+  return {
+    id,
+    name: `Tenant ${id}`,
+    subdomain: id,
+    settings: {
+      features: ['basic', 'advanced'],
+      limits: {
+        users: 100,
+        storage: 1024 * 1024 * 1024 // 1GB
+      }
+    }
+  }
+}
+
+// Usage with tenant isolation
+app.get('/users', async (c) => {
+  const tenant = c.get('tenant')
+  const db = c.get('db')
+  
+  // Query users for specific tenant
+  const users = await db.query(
+    'SELECT * FROM users WHERE tenant_id = $1',
+    [tenant.id]
+  )
+  
+  return c.json({ users })
+})
+```
+
+### Context Composition
+
+```typescript
+// src/middleware/context-composer.ts
+import { Context, Next } from 'hono'
+import { requestContextMiddleware } from './request-context'
+import { userContextMiddleware } from './user-context'
+import { loggingContextMiddleware } from './logging-context'
+import { featureFlagsMiddleware } from './feature-flags'
+
+// Compose multiple context middleware
+export const contextMiddleware = async (c: Context, next: Next) => {
+  // Chain multiple context middleware
+  await requestContextMiddleware(c, async () => {
+    await userContextMiddleware(c, async () => {
+      await loggingContextMiddleware(c, async () => {
+        await featureFlagsMiddleware(c, next)
+      })
+    })
+  })
+}
+
+// Alternative using a middleware chain helper
+export function composeMiddleware(...middlewares: Array<(c: Context, next: Next) => Promise<void>>) {
+  return async (c: Context, next: Next) => {
+    let index = 0
+    
+    async function dispatch(i: number): Promise<void> {
+      if (i <= index) return Promise.reject(new Error('next() called multiple times'))
+      index = i
+      
+      let fn = middlewares[i]
+      if (i === middlewares.length) fn = next as any
+      if (!fn) return
+      
+      try {
+        await fn(c, () => dispatch(i + 1))
+      } catch (err) {
+        return Promise.reject(err)
+      }
+    }
+    
+    return dispatch(0)
+  }
+}
+
+// Usage
+const composedContext = composeMiddleware(
+  requestContextMiddleware,
+  userContextMiddleware,
+  loggingContextMiddleware,
+  featureFlagsMiddleware
+)
+
+app.use('*', composedContext)
+```
+
+### Context Testing
+
+```typescript
+// tests/context.test.ts
+import { describe, it, expect, beforeEach } from 'vitest'
+import { Hono } from 'hono'
+import { testClient } from 'hono/testing'
+import { requestContextMiddleware } from '../src/middleware/request-context'
+
+describe('Request Context', () => {
+  let app: Hono
+  
+  beforeEach(() => {
+    app = new Hono()
+    app.use('*', requestContextMiddleware)
+  })
+  
+  it('should set request context variables', async () => {
+    app.get('/test', (c) => {
+      const requestId = c.get('requestId')
+      const requestContext = c.get('requestContext')
+      
+      return c.json({
+        requestId,
+        method: requestContext.method,
+        path: requestContext.path
+      })
+    })
+    
+    const res = await app.request('/test', {
+      method: 'GET',
+      headers: { 'User-Agent': 'test-agent' }
+    })
+    
+    expect(res.status).toBe(200)
+    
+    const data = await res.json()
+    expect(data.requestId).toBeDefined()
+    expect(data.method).toBe('GET')
+    expect(data.path).toBe('/test')
+  })
+  
+  it('should add request ID to response headers', async () => {
+    app.get('/test', (c) => c.json({ success: true }))
+    
+    const res = await app.request('/test')
+    
+    expect(res.headers.get('X-Request-ID')).toBeDefined()
+  })
+})
+```
+
+### Sources
+
+- [Context Documentation](https://hono.dev/docs/api/context)
+- [Variables](https://hono.dev/docs/api/context#var)
+- [Environment Variables](https://hono.dev/docs/api/context#env)
+````
+### honojs:database
+Database connection and ORM patterns
+````mdx
+## Database Integration
+
+### Rules
+
+- Database connections MUST be properly pooled and managed
+- SQL injection MUST be prevented using parameterized queries
+- Database operations MUST be wrapped in try-catch blocks
+- Transactions MUST be used for multi-step operations
+- Database schemas MUST be versioned with migrations
+- Connection timeouts MUST be configured appropriately
+- Database credentials MUST be stored in environment variables
+- Query performance MUST be monitored in production
+- Database connection health checks MUST be implemented
+
+### PostgreSQL with node-postgres
+
+```typescript
+// src/lib/db.ts
+import { Pool, PoolClient } from 'pg'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+  statement_timeout: 30000,
+  query_timeout: 30000,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+})
+
+// Health check
+export async function checkDatabaseHealth(): Promise<boolean> {
+  try {
+    const client = await pool.connect()
+    await client.query('SELECT 1')
+    client.release()
+    return true
+  } catch (error) {
+    console.error('Database health check failed:', error)
+    return false
+  }
+}
+
+// Generic query function
+export async function query<T = any>(
+  text: string,
+  params?: any[]
+): Promise<T[]> {
+  try {
+    const result = await pool.query(text, params)
+    return result.rows
+  } catch (error) {
+    console.error('Database query error:', error)
+    throw new Error('Database operation failed')
+  }
+}
+
+// Transaction wrapper
+export async function withTransaction<T>(
+  callback: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await pool.connect()
+  
+  try {
+    await client.query('BEGIN')
+    const result = await callback(client)
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+// User repository
+export const userRepository = {
+  async findAll(): Promise<User[]> {
+    return query<User>('SELECT * FROM users ORDER BY created_at DESC')
+  },
+
+  async findById(id: string): Promise<User | null> {
+    const users = await query<User>('SELECT * FROM users WHERE id = $1', [id])
+    return users[0] || null
+  },
+
+  async findByEmail(email: string): Promise<User | null> {
+    const users = await query<User>(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    )
+    return users[0] || null
+  },
+
+  async create(userData: CreateUserData): Promise<User> {
+    const users = await query<User>(
+      `INSERT INTO users (id, email, name, password_hash) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING *`,
+      [crypto.randomUUID(), userData.email, userData.name, userData.passwordHash]
+    )
+    return users[0]
+  },
+
+  async update(id: string, updates: Partial<UpdateUserData>): Promise<User | null> {
+    const fields = Object.keys(updates)
+    const values = Object.values(updates)
+    
+    if (fields.length === 0) {
+      return this.findById(id)
+    }
+    
+    const setClause = fields
+      .map((field, index) => `${field} = $${index + 2}`)
+      .join(', ')
+    
+    const users = await query<User>(
+      `UPDATE users SET ${setClause}, updated_at = NOW() 
+       WHERE id = $1 
+       RETURNING *`,
+      [id, ...values]
+    )
+    
+    return users[0] || null
+  },
+
+  async delete(id: string): Promise<boolean> {
+    const result = await pool.query('DELETE FROM users WHERE id = $1', [id])
+    return result.rowCount > 0
+  }
+}
+```
+
+### Drizzle ORM Integration
+
+```typescript
+// src/lib/drizzle.ts
+import { drizzle } from 'drizzle-orm/postgres-js'
+import { migrate } from 'drizzle-orm/postgres-js/migrator'
+import postgres from 'postgres'
+import * as schema from './schema'
+
+// Database connection
+const connectionString = process.env.DATABASE_URL!
+const sql = postgres(connectionString, { max: 1 })
+export const db = drizzle(sql, { schema })
+
+// Run migrations
+export async function runMigrations() {
+  await migrate(db, { migrationsFolder: './drizzle' })
+  await sql.end()
+}
+
+// src/lib/schema.ts
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  boolean,
+  timestamp,
+  index,
+  unique
+} from 'drizzle-orm/pg-core'
+import { relations } from 'drizzle-orm'
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: varchar('email', { length: 255 }).notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  passwordHash: text('password_hash').notNull(),
+  emailVerified: boolean('email_verified').default(false),
+  role: varchar('role', { length: 50 }).default('user'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  emailIdx: unique().on(table.email),
+  nameIdx: index().on(table.name),
+}))
+
+export const posts = pgTable('posts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: varchar('title', { length: 255 }).notNull(),
+  content: text('content').notNull(),
+  published: boolean('published').default(false),
+  authorId: uuid('author_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  authorIdx: index().on(table.authorId),
+  publishedIdx: index().on(table.published),
+}))
+
+// Relations
+export const usersRelations = relations(users, ({ many }) => ({
+  posts: many(posts),
+}))
+
+export const postsRelations = relations(posts, ({ one }) => ({
+  author: one(users, {
+    fields: [posts.authorId],
+    references: [users.id],
+  }),
+}))
+
+// Types
+export type User = typeof users.$inferSelect
+export type NewUser = typeof users.$inferInsert
+export type Post = typeof posts.$inferSelect
+export type NewPost = typeof posts.$inferInsert
+
+// Repository using Drizzle
+import { eq, desc, and, ilike } from 'drizzle-orm'
+
+export const drizzleUserRepository = {
+  async findAll() {
+    return db.select().from(users).orderBy(desc(users.createdAt))
+  },
+
+  async findById(id: string) {
+    const result = await db.select().from(users).where(eq(users.id, id))
+    return result[0] || null
+  },
+
+  async findByEmail(email: string) {
+    const result = await db.select().from(users).where(eq(users.email, email))
+    return result[0] || null
+  },
+
+  async create(userData: NewUser) {
+    const result = await db.insert(users).values(userData).returning()
+    return result[0]
+  },
+
+  async update(id: string, updates: Partial<NewUser>) {
+    const result = await db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning()
+    return result[0] || null
+  },
+
+  async delete(id: string) {
+    const result = await db.delete(users).where(eq(users.id, id))
+    return result.rowCount > 0
+  },
+
+  async findUsersWithPosts() {
+    return db.select().from(users).with(
+      db.select().from(posts).where(eq(posts.authorId, users.id))
+    )
+  }
+}
+```
+
+### Prisma Integration
+
+```typescript
+// src/lib/prisma.ts
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+
+// Graceful shutdown
+process.on('beforeExit', async () => {
+  await prisma.$disconnect()
+})
+
+// Repository pattern with Prisma
+export const prismaUserRepository = {
+  async findAll() {
+    return prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { posts: true }
+    })
+  },
+
+  async findById(id: string) {
+    return prisma.user.findUnique({
+      where: { id },
+      include: { posts: true }
+    })
+  },
+
+  async findByEmail(email: string) {
+    return prisma.user.findUnique({
+      where: { email }
+    })
+  },
+
+  async create(data: { email: string; name: string; passwordHash: string }) {
+    return prisma.user.create({
+      data,
+      include: { posts: true }
+    })
+  },
+
+  async update(id: string, data: { name?: string; email?: string }) {
+    return prisma.user.update({
+      where: { id },
+      data,
+      include: { posts: true }
+    })
+  },
+
+  async delete(id: string) {
+    await prisma.user.delete({
+      where: { id }
+    })
+    return true
+  },
+
+  async createWithPosts(userData: any, postsData: any[]) {
+    return prisma.user.create({
+      data: {
+        ...userData,
+        posts: {
+          create: postsData
+        }
+      },
+      include: { posts: true }
+    })
+  }
+}
+
+// schema.prisma
+/*
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  emailVerified Boolean @default(false) @map("email_verified")
+  role         String   @default("user")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  
+  posts Post[]
+  
+  @@map("users")
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  published Boolean  @default(false)
+  authorId  String   @map("author_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  author User @relation(fields: [authorId], references: [id])
+  
+  @@map("posts")
+}
+*/
+```
+
+### SQLite with Better-SQLite3
+
+```typescript
+// src/lib/sqlite.ts
+import Database from 'better-sqlite3'
+import { join } from 'path'
+
+const dbPath = process.env.DATABASE_PATH || join(process.cwd(), 'database.sqlite')
+export const db = new Database(dbPath)
+
+// Enable WAL mode for better performance
+db.pragma('journal_mode = WAL')
+db.pragma('synchronous = NORMAL')
+db.pragma('cache_size = 1000000')
+db.pragma('temp_store = memory')
+
+// Initialize schema
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    email_verified BOOLEAN DEFAULT FALSE,
+    role TEXT DEFAULT 'user',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+  CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+`)
+
+// Prepared statements for better performance
+const statements = {
+  findAllUsers: db.prepare('SELECT * FROM users ORDER BY created_at DESC'),
+  findUserById: db.prepare('SELECT * FROM users WHERE id = ?'),
+  findUserByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
+  createUser: db.prepare(`
+    INSERT INTO users (id, email, name, password_hash)
+    VALUES (?, ?, ?, ?)
+  `),
+  updateUser: db.prepare(`
+    UPDATE users 
+    SET email = ?, name = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `),
+  deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
+}
+
+export const sqliteUserRepository = {
+  findAll() {
+    return statements.findAllUsers.all()
+  },
+
+  findById(id: string) {
+    return statements.findUserById.get(id) || null
+  },
+
+  findByEmail(email: string) {
+    return statements.findUserByEmail.get(email) || null
+  },
+
+  create(userData: { email: string; name: string; passwordHash: string }) {
+    const id = crypto.randomUUID()
+    statements.createUser.run(id, userData.email, userData.name, userData.passwordHash)
+    return this.findById(id)
+  },
+
+  update(id: string, updates: { email?: string; name?: string }) {
+    const user = this.findById(id)
+    if (!user) return null
+    
+    statements.updateUser.run(
+      updates.email || user.email,
+      updates.name || user.name,
+      id
+    )
+    return this.findById(id)
+  },
+
+  delete(id: string) {
+    const result = statements.deleteUser.run(id)
+    return result.changes > 0
+  }
+}
+
+// Graceful shutdown
+process.on('exit', () => db.close())
+process.on('SIGHUP', () => process.exit(128 + 1))
+process.on('SIGINT', () => process.exit(128 + 2))
+process.on('SIGTERM', () => process.exit(128 + 15))
+```
+
+### Database Middleware
+
+```typescript
+// src/middleware/database.ts
+import { Context, Next } from 'hono'
+import { db } from '../lib/db'
+
+// Add database to context
+export const databaseMiddleware = async (c: Context, next: Next) => {
+  c.set('db', db)
+  await next()
+}
+
+// Transaction middleware
+export const transactionMiddleware = async (c: Context, next: Next) => {
+  const transaction = await db.transaction()
+  c.set('transaction', transaction)
+  
+  try {
+    await next()
+    await transaction.commit()
+  } catch (error) {
+    await transaction.rollback()
+    throw error
+  }
+}
+
+// Usage in routes
+app.use('*', databaseMiddleware)
+
+app.post('/users', transactionMiddleware, async (c) => {
+  const transaction = c.get('transaction')
+  const userData = await c.req.json()
+  
+  // Create user within transaction
+  const user = await transaction.user.create({ data: userData })
+  
+  return c.json({ user }, 201)
+})
+```
+
+### Connection Pooling for Cloudflare D1
+
+```typescript
+// src/lib/d1.ts
+export const d1UserRepository = {
+  async findAll(env: { DB: D1Database }) {
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM users ORDER BY created_at DESC'
+    ).all()
+    return results
+  },
+
+  async findById(env: { DB: D1Database }, id: string) {
+    const result = await env.DB.prepare(
+      'SELECT * FROM users WHERE id = ?'
+    ).bind(id).first()
+    return result || null
+  },
+
+  async create(env: { DB: D1Database }, userData: any) {
+    const id = crypto.randomUUID()
+    
+    await env.DB.prepare(`
+      INSERT INTO users (id, email, name, password_hash)
+      VALUES (?, ?, ?, ?)
+    `).bind(id, userData.email, userData.name, userData.passwordHash).run()
+    
+    return this.findById(env, id)
+  },
+
+  async update(env: { DB: D1Database }, id: string, updates: any) {
+    await env.DB.prepare(`
+      UPDATE users 
+      SET email = ?, name = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(updates.email, updates.name, id).run()
+    
+    return this.findById(env, id)
+  },
+
+  async delete(env: { DB: D1Database }, id: string) {
+    const result = await env.DB.prepare(
+      'DELETE FROM users WHERE id = ?'
+    ).bind(id).run()
+    
+    return result.changes > 0
+  }
+}
+
+// Usage in Cloudflare Workers
+app.get('/users', async (c) => {
+  const users = await d1UserRepository.findAll(c.env)
+  return c.json({ users })
+})
+```
+
+### Database Testing
+
+```typescript
+// tests/database.test.ts
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { userRepository } from '../src/lib/db'
+
+describe('User Repository', () => {
+  beforeEach(async () => {
+    // Setup test database
+    await setupTestDatabase()
+  })
+
+  afterEach(async () => {
+    // Cleanup test database
+    await cleanupTestDatabase()
+  })
+
+  it('should create a user', async () => {
+    const userData = {
+      email: 'test@example.com',
+      name: 'Test User',
+      passwordHash: 'hashed-password'
+    }
+
+    const user = await userRepository.create(userData)
+
+    expect(user).toBeDefined()
+    expect(user.email).toBe(userData.email)
+    expect(user.name).toBe(userData.name)
+    expect(user.id).toBeDefined()
+  })
+
+  it('should find user by email', async () => {
+    const userData = {
+      email: 'test@example.com',
+      name: 'Test User',
+      passwordHash: 'hashed-password'
+    }
+
+    await userRepository.create(userData)
+    const user = await userRepository.findByEmail(userData.email)
+
+    expect(user).toBeDefined()
+    expect(user.email).toBe(userData.email)
+  })
+
+  it('should update user', async () => {
+    const userData = {
+      email: 'test@example.com',
+      name: 'Test User',
+      passwordHash: 'hashed-password'
+    }
+
+    const user = await userRepository.create(userData)
+    const updated = await userRepository.update(user.id, { name: 'Updated Name' })
+
+    expect(updated.name).toBe('Updated Name')
+    expect(updated.email).toBe(userData.email)
+  })
+})
+```
+
+### Sources
+
+- [Drizzle ORM](https://orm.drizzle.team)
+- [Prisma](https://www.prisma.io)
+- [node-postgres](https://node-postgres.com)
+- [Cloudflare D1](https://developers.cloudflare.com/d1/)
+````
+### honojs:deployment
+Multi-runtime deployment strategies
+````mdx
+## Deployment
+
+### Rules
+
+- Environment-specific configurations MUST be managed through environment variables
+- Build artifacts MUST be optimized for the target runtime
+- Health check endpoints MUST be implemented
+- Graceful shutdown MUST be handled properly
+- Logging and monitoring MUST be configured for production
+- Secrets MUST NEVER be committed to version control
+- Different runtimes require different entry points
+- Performance optimizations MUST be runtime-specific
+- Cold start times SHOULD be minimized for serverless deployments
+
+### Node.js Deployment
+
+```typescript
+// src/node.ts
+import { serve } from '@hono/node-server'
+import { compress } from 'hono/compress'
+import app from './app'
+
+const port = parseInt(process.env.PORT || '3000', 10)
+
+// Add Node.js specific middleware
+app.use('*', compress())
+
+const server = serve({
+  fetch: app.fetch,
+  port
+})
+
+console.log(`Server running on http://localhost:${port}`)
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, closing server...')
+  server.close(() => {
+    console.log('Server closed')
+    process.exit(0)
+  })
+})
+
+// package.json scripts
+{
+  "scripts": {
+    "start": "node dist/node.js",
+    "build": "tsc",
+    "dev": "tsx watch src/node.ts"
+  }
+}
+
+// Dockerfile for Node.js
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY dist ./dist
+EXPOSE 3000
+USER node
+CMD ["node", "dist/node.js"]
+```
+
+### Cloudflare Workers
+
+```typescript
+// src/cloudflare.ts
+import app from './app'
+
+export default {
+  fetch: app.fetch,
+  
+  // Scheduled handler (Cron Triggers)
+  scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(handleScheduledEvent(event, env))
+  },
+  
+  // Queue handler
+  queue(batch: MessageBatch, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(processQueue(batch, env))
+  }
+}
+
+// wrangler.toml
+name = "my-hono-app"
+main = "src/cloudflare.ts"
+compatibility_date = "2024-01-01"
+node_compat = true
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+kv_namespaces = [
+  { binding = "KV", id = "your-kv-id" }
+]
+durable_objects.bindings = [
+  { name = "COUNTER", class_name = "Counter" }
+]
+r2_buckets = [
+  { binding = "BUCKET", bucket_name = "my-bucket" }
+]
+
+[[env.production.routes]]
+pattern = "api.example.com/*"
+zone_id = "your-zone-id"
+
+[env.production.limits]
+cpu_ms = 50
+
+// package.json scripts
+{
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  }
+}
+```
+
+### Vercel
+
+```typescript
+// api/index.ts (Vercel Functions)
+import { handle } from 'hono/vercel'
+import app from '../src/app'
+
+export const config = {
+  runtime: 'edge', // or 'nodejs'
+  regions: ['iad1'], // Specify regions
+  maxDuration: 10 // Maximum execution time in seconds
+}
+
+export default handle(app)
+
+// vercel.json
+{
+  "functions": {
+    "api/index.ts": {
+      "runtime": "edge",
+      "maxDuration": 10,
+      "memory": 1024,
+      "regions": ["iad1", "sfo1"]
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist"
+}
+
+// package.json scripts
+{
+  "scripts": {
+    "build": "tsc",
+    "vercel": "vercel",
+    "vercel:prod": "vercel --prod"
+  }
+}
+```
+
+### AWS Lambda
+
+```typescript
+// src/lambda.ts
+import { handle } from 'hono/aws-lambda'
+import app from './app'
+
+export const handler = handle(app)
+
+// serverless.yml (Serverless Framework)
+service: hono-lambda-app
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-1
+  memorySize: 512
+  timeout: 10
+  environment:
+    NODE_ENV: production
+    DATABASE_URL: ${env:DATABASE_URL}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:*
+          Resource: "*"
+
+functions:
+  api:
+    handler: dist/lambda.handler
+    events:
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+      - httpApi:
+          path: /
+          method: ANY
+    reservedConcurrency: 10
+    provisionedConcurrency: 2
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-offline
+
+// CDK deployment (alternative)
+import * as cdk from 'aws-cdk-lib'
+import * as lambda from 'aws-cdk-lib/aws-lambda'
+import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2'
+
+export class HonoLambdaStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props)
+    
+    const fn = new lambda.Function(this, 'HonoFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      code: lambda.Code.fromAsset('dist'),
+      handler: 'lambda.handler',
+      memorySize: 512,
+      timeout: cdk.Duration.seconds(10),
+      environment: {
+        NODE_ENV: 'production'
+      }
+    })
+    
+    const api = new apigateway.HttpApi(this, 'HonoApi', {
+      defaultIntegration: new apigateway.HttpLambdaIntegration(
+        'HonoIntegration',
+        fn
+      )
+    })
+  }
+}
+```
+
+### Deno Deploy
+
+```typescript
+// src/deno.ts
+import { Hono } from 'https://deno.land/x/hono/mod.ts'
+import app from './app.ts'
+
+Deno.serve(app.fetch)
+
+// deno.json
+{
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --watch src/deno.ts",
+    "start": "deno run --allow-net --allow-env src/deno.ts",
+    "deploy": "deployctl deploy --project=my-project src/deno.ts"
+  },
+  "imports": {
+    "hono": "https://deno.land/x/hono/mod.ts",
+    "@/": "./src/"
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx"
+  }
+}
+
+// GitHub Actions deployment
+name: Deploy to Deno Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: denoland/deployctl@v1
+        with:
+          project: my-project
+          entrypoint: src/deno.ts
+          root: .
+```
+
+### Bun Deployment
+
+```typescript
+// src/bun.ts
+import app from './app'
+
+const server = Bun.serve({
+  port: process.env.PORT || 3000,
+  fetch: app.fetch,
+  
+  // Bun-specific optimizations
+  maxRequestBodySize: 10 * 1024 * 1024, // 10MB
+  
+  // WebSocket support
+  websocket: {
+    open(ws) {
+      console.log('WebSocket opened')
+    },
+    message(ws, message) {
+      ws.send(message)
+    },
+    close(ws) {
+      console.log('WebSocket closed')
+    }
+  }
+})
+
+console.log(`Server running on ${server.url}`)
+
+// package.json scripts
+{
+  "scripts": {
+    "start": "bun run src/bun.ts",
+    "dev": "bun --watch src/bun.ts",
+    "build": "bun build src/bun.ts --outdir dist --target bun"
+  }
+}
+
+// Dockerfile for Bun
+FROM oven/bun:latest AS builder
+WORKDIR /app
+COPY package.json bun.lockb ./
+RUN bun install --frozen-lockfile --production
+
+FROM oven/bun:latest
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY src ./src
+EXPOSE 3000
+USER bun
+CMD ["bun", "run", "src/bun.ts"]
+```
+
+### Docker Deployment
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://user:pass@db:5432/mydb
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=mydb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+
+# Multi-stage Dockerfile
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV production
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 hono
+COPY --from=builder --chown=hono:nodejs /app/dist ./dist
+COPY --from=deps --chown=hono:nodejs /app/node_modules ./node_modules
+USER hono
+EXPOSE 3000
+CMD ["node", "dist/node.js"]
+```
+
+### Health Checks & Monitoring
+
+```typescript
+// Health check endpoint
+app.get('/health', (c) => {
+  return c.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    version: process.env.APP_VERSION || 'unknown'
+  })
+})
+
+// Readiness check
+app.get('/ready', async (c) => {
+  try {
+    // Check database connection
+    await checkDatabaseConnection()
+    // Check external services
+    await checkExternalServices()
+    
+    return c.json({ ready: true })
+  } catch (error) {
+    return c.json({ ready: false, error: error.message }, 503)
+  }
+})
+
+// Metrics endpoint
+app.get('/metrics', (c) => {
+  const metrics = collectMetrics()
+  c.header('Content-Type', 'text/plain')
+  return c.text(metrics)
+})
+```
+
+### Environment Configuration
+
+```typescript
+// src/config/index.ts
+import { z } from 'zod'
+
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']),
+  PORT: z.string().default('3000'),
+  DATABASE_URL: z.string(),
+  REDIS_URL: z.string().optional(),
+  JWT_SECRET: z.string().min(32),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  CORS_ORIGIN: z.string().default('*'),
+  RATE_LIMIT_MAX: z.string().default('100'),
+  RATE_LIMIT_WINDOW_MS: z.string().default('900000')
+})
+
+export const config = envSchema.parse(process.env)
+
+// Runtime-specific configuration
+export const getRuntimeConfig = () => {
+  const runtime = detectRuntime()
+  
+  switch (runtime) {
+    case 'cloudflare':
+      return {
+        maxBodySize: 10 * 1024 * 1024, // 10MB
+        maxDuration: 30
+      }
+    case 'vercel':
+      return {
+        maxBodySize: 4.5 * 1024 * 1024, // 4.5MB
+        maxDuration: 10
+      }
+    case 'aws-lambda':
+      return {
+        maxBodySize: 6 * 1024 * 1024, // 6MB
+        maxDuration: 900
+      }
+    default:
+      return {
+        maxBodySize: 50 * 1024 * 1024, // 50MB
+        maxDuration: Infinity
+      }
+  }
+}
+```
+
+### Sources
+
+- [Deployment Guide](https://hono.dev/docs/getting-started/vercel)
+- [Cloudflare Workers](https://hono.dev/docs/getting-started/cloudflare-workers)
+- [AWS Lambda](https://hono.dev/docs/getting-started/aws-lambda)
+- [Deno Deploy](https://hono.dev/docs/getting-started/deno)
+````
+### honojs:error-handling
+Exception handling and error responses
+````mdx
+## Error Handling
+
+### Rules
+
+- ALWAYS use `HTTPException` for HTTP-related errors
+- NEVER throw plain `Error` objects in route handlers
+- Custom error handlers MUST be defined using `app.onError()`
+- Error messages MUST be clear and actionable
+- Sensitive information MUST NEVER be exposed in error messages
+- Different error types MUST return appropriate HTTP status codes
+- Error responses MUST follow a consistent format
+- Validation errors MUST return 400 status code
+- Authentication errors MUST return 401 status code
+- Authorization errors MUST return 403 status code
+- Not found errors MUST return 404 status code
+
+### HTTPException Usage
+
+```typescript
+import { HTTPException } from 'hono/http-exception'
+
+// Basic HTTPException
+app.get('/users/:id', async (c) => {
+  const id = c.req.param('id')
+  const user = await findUser(id)
+  
+  if (!user) {
+    throw new HTTPException(404, {
+      message: `User with ID ${id} not found`
+    })
+  }
+  
+  return c.json(user)
+})
+
+// Authentication error
+app.post('/admin', async (c) => {
+  const token = c.req.header('Authorization')
+  
+  if (!token) {
+    throw new HTTPException(401, {
+      message: 'Authentication required'
+    })
+  }
+  
+  if (!isValidToken(token)) {
+    throw new HTTPException(401, {
+      message: 'Invalid or expired token'
+    })
+  }
+  
+  return c.json({ success: true })
+})
+
+// Custom response with HTTPException
+app.get('/protected', (c) => {
+  const errorResponse = new Response('Unauthorized', {
+    status: 401,
+    headers: {
+      'WWW-Authenticate': 'Bearer realm="api"'
+    }
+  })
+  
+  throw new HTTPException(401, { res: errorResponse })
+})
+
+// With error cause
+app.post('/process', async (c) => {
+  try {
+    await processData()
+  } catch (error) {
+    throw new HTTPException(500, {
+      message: 'Processing failed',
+      cause: error
+    })
+  }
+})
+```
+
+### Global Error Handler
+
+```typescript
+import { HTTPException } from 'hono/http-exception'
+import { ZodError } from 'zod'
+
+app.onError((err, c) => {
+  // Handle HTTPException
+  if (err instanceof HTTPException) {
+    return err.getResponse()
+  }
+  
+  // Handle Zod validation errors
+  if (err instanceof ZodError) {
+    return c.json(
+      {
+        error: 'Validation failed',
+        issues: err.issues.map(issue => ({
+          path: issue.path.join('.'),
+          message: issue.message
+        }))
+      },
+      400
+    )
+  }
+  
+  // Handle database errors
+  if (err.name === 'DatabaseError') {
+    console.error('Database error:', err)
+    return c.json(
+      { error: 'Database operation failed' },
+      503
+    )
+  }
+  
+  // Log unexpected errors
+  console.error('Unexpected error:', err)
+  
+  // Generic error response (don't expose internals)
+  return c.json(
+    {
+      error: 'Internal server error',
+      message: process.env.NODE_ENV === 'development' 
+        ? err.message 
+        : 'An unexpected error occurred'
+    },
+    500
+  )
+})
+```
+
+### Custom Error Classes
+
+```typescript
+// src/lib/errors.ts
+import { HTTPException } from 'hono/http-exception'
+
+export class ValidationError extends HTTPException {
+  constructor(message: string, details?: any) {
+    super(400, { message })
+    this.name = 'ValidationError'
+    this.details = details
+  }
+  details?: any
+}
+
+export class AuthenticationError extends HTTPException {
+  constructor(message = 'Authentication required') {
+    super(401, { message })
+    this.name = 'AuthenticationError'
+  }
+}
+
+export class AuthorizationError extends HTTPException {
+  constructor(message = 'Insufficient permissions') {
+    super(403, { message })
+    this.name = 'AuthorizationError'
+  }
+}
+
+export class NotFoundError extends HTTPException {
+  constructor(resource: string, id?: string) {
+    const message = id 
+      ? `${resource} with ID ${id} not found`
+      : `${resource} not found`
+    super(404, { message })
+    this.name = 'NotFoundError'
+  }
+}
+
+export class ConflictError extends HTTPException {
+  constructor(message: string) {
+    super(409, { message })
+    this.name = 'ConflictError'
+  }
+}
+
+export class RateLimitError extends HTTPException {
+  constructor(retryAfter?: number) {
+    const headers = retryAfter 
+      ? { 'Retry-After': retryAfter.toString() }
+      : undefined
+    
+    super(429, {
+      message: 'Too many requests',
+      res: new Response('Too many requests', {
+        status: 429,
+        headers
+      })
+    })
+    this.name = 'RateLimitError'
+  }
+}
+
+// Usage
+app.get('/users/:id', async (c) => {
+  const id = c.req.param('id')
+  const user = await findUser(id)
+  
+  if (!user) {
+    throw new NotFoundError('User', id)
+  }
+  
+  return c.json(user)
+})
+
+app.post('/users', async (c) => {
+  const data = await c.req.json()
+  
+  if (await userExists(data.email)) {
+    throw new ConflictError('User with this email already exists')
+  }
+  
+  const user = await createUser(data)
+  return c.json(user, 201)
+})
+```
+
+### Error Response Formatting
+
+```typescript
+// Consistent error response format
+interface ErrorResponse {
+  error: {
+    code: string
+    message: string
+    details?: any
+    timestamp: string
+    path: string
+    requestId?: string
+  }
+}
+
+app.onError((err, c) => {
+  const requestId = c.get('requestId') // From request ID middleware
+  
+  let status = 500
+  let code = 'INTERNAL_ERROR'
+  let message = 'An unexpected error occurred'
+  let details = undefined
+  
+  if (err instanceof HTTPException) {
+    status = err.status
+    code = err.name.toUpperCase().replace('ERROR', '')
+    message = err.message
+    details = (err as any).details
+  } else if (err instanceof ZodError) {
+    status = 400
+    code = 'VALIDATION_ERROR'
+    message = 'Request validation failed'
+    details = err.flatten()
+  }
+  
+  const errorResponse: ErrorResponse = {
+    error: {
+      code,
+      message,
+      details,
+      timestamp: new Date().toISOString(),
+      path: c.req.path,
+      requestId
+    }
+  }
+  
+  return c.json(errorResponse, status)
+})
+```
+
+### Async Error Handling
+
+```typescript
+// Async error handling in middleware
+app.use('*', async (c, next) => {
+  try {
+    await next()
+  } catch (error) {
+    // Log the error
+    console.error('Request failed:', {
+      path: c.req.path,
+      method: c.req.method,
+      error
+    })
+    
+    // Re-throw to be handled by onError
+    throw error
+  }
+})
+
+// Async operation with proper error handling
+app.post('/import', async (c) => {
+  const file = await c.req.formData()
+  
+  try {
+    const result = await importData(file)
+    return c.json({ success: true, result })
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error // Re-throw known errors
+    }
+    
+    // Wrap unknown errors
+    throw new HTTPException(500, {
+      message: 'Import failed',
+      cause: error
+    })
+  }
+})
+```
+
+### Error Recovery Strategies
+
+```typescript
+// Retry with exponential backoff
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  let lastError: any
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => 
+          setTimeout(resolve, Math.pow(2, i) * 1000)
+        )
+      }
+    }
+  }
+  
+  throw new HTTPException(503, {
+    message: 'Service temporarily unavailable',
+    cause: lastError
+  })
+}
+
+app.get('/external-data', async (c) => {
+  const data = await withRetry(() => fetchExternalData())
+  return c.json(data)
+})
+
+// Circuit breaker pattern
+class CircuitBreaker {
+  private failures = 0
+  private lastFailureTime = 0
+  private state: 'closed' | 'open' | 'half-open' = 'closed'
+  
+  constructor(
+    private threshold = 5,
+    private timeout = 60000
+  ) {}
+  
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.state === 'open') {
+      if (Date.now() - this.lastFailureTime > this.timeout) {
+        this.state = 'half-open'
+      } else {
+        throw new HTTPException(503, {
+          message: 'Service circuit breaker is open'
+        })
+      }
+    }
+    
+    try {
+      const result = await fn()
+      if (this.state === 'half-open') {
+        this.state = 'closed'
+        this.failures = 0
+      }
+      return result
+    } catch (error) {
+      this.failures++
+      this.lastFailureTime = Date.now()
+      
+      if (this.failures >= this.threshold) {
+        this.state = 'open'
+      }
+      
+      throw error
+    }
+  }
+}
+
+const breaker = new CircuitBreaker()
+
+app.get('/protected-resource', async (c) => {
+  const data = await breaker.execute(() => fetchProtectedResource())
+  return c.json(data)
+})
+```
+
+### Sources
+
+- [Exception Documentation](https://hono.dev/docs/api/exception)
+- [Error Handling Best Practices](https://hono.dev/docs/guides/best-practices)
+- [HTTPException API](https://hono.dev/docs/api/exception#httpexception)
+````
+### honojs:middleware
+Middleware creation, ordering, and usage
+````mdx
+## Middleware
+
+### Rules
+
+- Middleware MUST be functions that accept `(c, next)` parameters
+- Middleware MUST call `await next()` to continue the chain
+- Global middleware MUST be registered using `app.use()`
+- Route-specific middleware MUST be registered before the route handler
+- Middleware execution follows an "onion" model (before and after handler)
+- Custom middleware MUST be placed in `src/middleware/` directory
+- Built-in middleware SHOULD be preferred over custom implementations
+- Middleware MUST handle errors appropriately
+- Middleware order matters - register in the correct sequence
+
+### Built-in Middleware
+
+```typescript
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import { logger } from 'hono/logger'
+import { compress } from 'hono/compress'
+import { etag } from 'hono/etag'
+import { secureHeaders } from 'hono/secure-headers'
+import { csrf } from 'hono/csrf'
+import { basicAuth } from 'hono/basic-auth'
+import { bearerAuth } from 'hono/bearer-auth'
+import { timing } from 'hono/timing'
+import { cache } from 'hono/cache'
+
+const app = new Hono()
+
+// Logging
+app.use('*', logger())
+
+// CORS
+app.use('*', cors({
+  origin: ['https://example.com'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}))
+
+// Compression
+app.use('*', compress())
+
+// ETag
+app.use('*', etag())
+
+// Security headers
+app.use('*', secureHeaders())
+
+// CSRF protection
+app.use('*', csrf())
+
+// Basic authentication
+app.use('/admin/*', basicAuth({
+  username: 'admin',
+  password: 'secret'
+}))
+
+// Bearer token authentication
+app.use('/api/*', bearerAuth({
+  token: 'your-secret-token'
+}))
+
+// Timing
+app.use('*', timing())
+
+// Cache
+app.get('/cached', cache({ cacheName: 'my-cache' }), (c) => {
+  return c.json({ cached: true })
+})
+```
+
+### Custom Middleware
+
+#### Response Time Middleware
+
+```typescript
+// src/middleware/responseTime.ts
+import { Context, Next } from 'hono'
+
+export const responseTime = async (c: Context, next: Next) => {
+  const start = performance.now()
+  await next()
+  const end = performance.now()
+  c.res.headers.set('X-Response-Time', `${end - start}ms`)
+}
+
+// Usage
+app.use('*', responseTime)
+```
+
+#### Request ID Middleware
+
+```typescript
+// src/middleware/requestId.ts
+import { Context, Next } from 'hono'
+import { randomUUID } from 'crypto'
+
+export const requestId = async (c: Context, next: Next) => {
+  const id = c.req.header('X-Request-ID') || randomUUID()
+  c.set('requestId', id)
+  await next()
+  c.res.headers.set('X-Request-ID', id)
+}
+
+// Usage
+app.use('*', requestId)
+app.get('/test', (c) => {
+  const id = c.get('requestId')
+  return c.json({ requestId: id })
+})
+```
+
+#### Error Handling Middleware
+
+```typescript
+// src/middleware/errorHandler.ts
+import { Context, Next } from 'hono'
+import { HTTPException } from 'hono/http-exception'
+
+export const errorHandler = async (c: Context, next: Next) => {
+  try {
+    await next()
+  } catch (err) {
+    if (err instanceof HTTPException) {
+      return err.getResponse()
+    }
+    
+    console.error('Unhandled error:', err)
+    return c.json(
+      { error: 'Internal Server Error' },
+      500
+    )
+  }
+}
+
+// Usage (register as first middleware)
+app.use('*', errorHandler)
+```
+
+#### Rate Limiting Middleware
+
+```typescript
+// src/middleware/rateLimit.ts
+import { Context, Next } from 'hono'
+
+const requests = new Map<string, number[]>()
+
+export const rateLimit = (max: number, windowMs: number) => {
+  return async (c: Context, next: Next) => {
+    const ip = c.req.header('x-forwarded-for') || 'unknown'
+    const now = Date.now()
+    const windowStart = now - windowMs
+    
+    const userRequests = requests.get(ip) || []
+    const recentRequests = userRequests.filter(time => time > windowStart)
+    
+    if (recentRequests.length >= max) {
+      return c.json({ error: 'Too many requests' }, 429)
+    }
+    
+    recentRequests.push(now)
+    requests.set(ip, recentRequests)
+    
+    await next()
+  }
+}
+
+// Usage
+app.use('/api/*', rateLimit(100, 60 * 1000)) // 100 requests per minute
+```
+
+### Middleware Factory Pattern
+
+```typescript
+// src/middleware/factory.ts
+import { createFactory } from 'hono/factory'
+
+const factory = createFactory()
+
+// Create reusable middleware
+export const authMiddleware = factory.createMiddleware(async (c, next) => {
+  const token = c.req.header('Authorization')
+  if (!token) {
+    throw new HTTPException(401, { message: 'Unauthorized' })
+  }
+  // Validate token
+  c.set('userId', 'user123')
+  await next()
+})
+
+// Create handlers with middleware
+export const protectedHandler = factory.createHandlers(
+  authMiddleware,
+  (c) => {
+    const userId = c.get('userId')
+    return c.json({ userId })
+  }
+)
+
+// Usage
+app.get('/protected', ...protectedHandler)
+```
+
+### Conditional Middleware
+
+```typescript
+// Apply middleware conditionally
+app.use('*', async (c, next) => {
+  if (c.req.path.startsWith('/public')) {
+    return next() // Skip middleware for public routes
+  }
+  // Apply middleware logic
+  await next()
+})
+
+// Environment-based middleware
+if (process.env.NODE_ENV === 'development') {
+  app.use('*', logger())
+}
+```
+
+### Middleware Composition
+
+```typescript
+// Compose multiple middleware
+const composed = compose(
+  cors(),
+  logger(),
+  compress()
+)
+
+app.use('*', composed)
+
+// Or chain them
+app.use('*', cors())
+   .use('*', logger())
+   .use('*', compress())
+```
+
+### Sources
+
+- [Middleware Documentation](https://hono.dev/docs/concepts/middleware)
+- [Built-in Middleware](https://hono.dev/docs/middleware/builtin)
+- [Custom Middleware Guide](https://hono.dev/docs/guides/middleware)
+````
+### honojs:performance
+Optimization, caching, and compression
+````mdx
+## Performance
+
+### Rules
+
+- Response compression MUST be enabled for production
+- Static assets SHOULD be cached with appropriate headers
+- Database queries MUST be optimized and use connection pooling
+- Large payloads SHOULD be paginated
+- ETags SHOULD be used for conditional requests
+- Response time SHOULD be monitored
+- Memory usage MUST be monitored in production
+- Streaming SHOULD be used for large responses
+- Unnecessary middleware MUST NOT be used in production
+- Routes MUST be ordered by specificity for optimal matching
+
+### Compression
+
+```typescript
+import { compress } from 'hono/compress'
+
+// Enable gzip/deflate compression
+app.use('*', compress())
+
+// Custom compression options
+app.use('*', compress({
+  encoding: 'gzip', // or 'deflate', 'br'
+}))
+
+// Conditional compression
+app.use('*', async (c, next) => {
+  const path = c.req.path
+  
+  // Don't compress images and videos
+  if (path.match(/\.(jpg|jpeg|png|gif|webp|mp4|webm)$/i)) {
+    return next()
+  }
+  
+  return compress()(c, next)
+})
+```
+
+### Caching Strategies
+
+```typescript
+import { cache } from 'hono/cache'
+import { etag } from 'hono/etag'
+
+// Browser caching with Cache-Control headers
+app.use('/static/*', async (c, next) => {
+  await next()
+  
+  // Cache static assets for 1 year
+  c.header('Cache-Control', 'public, max-age=31536000, immutable')
+})
+
+app.use('/api/*', async (c, next) => {
+  await next()
+  
+  // Cache API responses for 5 minutes
+  c.header('Cache-Control', 'public, max-age=300, s-maxage=300')
+})
+
+// ETag support for conditional requests
+app.use('*', etag())
+
+// Edge caching (Cloudflare Workers)
+app.get('/cached-data',
+  cache({
+    cacheName: 'my-app-cache',
+    cacheControl: 'max-age=3600',
+    wait: true,
+    vary: ['Accept-Encoding', 'Accept-Language']
+  }),
+  async (c) => {
+    const data = await fetchExpensiveData()
+    return c.json(data)
+  }
+)
+
+// Custom in-memory cache
+const memoryCache = new Map<string, { data: any; expires: number }>()
+
+const withCache = (ttl: number) => {
+  return async (c: Context, next: Next) => {
+    const key = `${c.req.method}:${c.req.url}`
+    const cached = memoryCache.get(key)
+    
+    if (cached && cached.expires > Date.now()) {
+      return c.json(cached.data)
+    }
+    
+    await next()
+    
+    if (c.res.status === 200) {
+      const data = await c.res.json()
+      memoryCache.set(key, {
+        data,
+        expires: Date.now() + ttl * 1000
+      })
+      return c.json(data)
+    }
+  }
+}
+
+app.get('/expensive-operation', 
+  withCache(300), // Cache for 5 minutes
+  async (c) => {
+    const result = await performExpensiveOperation()
+    return c.json(result)
+  }
+)
+```
+
+### Response Streaming
+
+```typescript
+// Stream large JSON responses
+app.get('/large-dataset', async (c) => {
+  return c.streamText(async (stream) => {
+    await stream.write('[')
+    
+    for (let i = 0; i < 10000; i++) {
+      if (i > 0) await stream.write(',')
+      
+      const item = await fetchItem(i)
+      await stream.write(JSON.stringify(item))
+      
+      // Yield control periodically
+      if (i % 100 === 0) {
+        await stream.sleep(0)
+      }
+    }
+    
+    await stream.write(']')
+  })
+})
+
+// Server-Sent Events (SSE)
+app.get('/events', async (c) => {
+  return c.streamText(async (stream) => {
+    stream.header('Content-Type', 'text/event-stream')
+    stream.header('Cache-Control', 'no-cache')
+    stream.header('Connection', 'keep-alive')
+    
+    while (true) {
+      const event = await getNextEvent()
+      
+      if (event) {
+        await stream.write(`data: ${JSON.stringify(event)}\n\n`)
+      }
+      
+      await stream.sleep(1000)
+    }
+  })
+})
+
+// Stream file downloads
+app.get('/download/:file', async (c) => {
+  const fileName = c.req.param('file')
+  const fileStream = await getFileStream(fileName)
+  
+  c.header('Content-Type', 'application/octet-stream')
+  c.header('Content-Disposition', `attachment; filename="${fileName}"`)
+  
+  return c.body(fileStream)
+})
+```
+
+### Database Optimization
+
+```typescript
+// Connection pooling example
+import { Pool } from 'pg'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20, // Maximum number of clients
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+})
+
+// Use prepared statements
+const getUserById = async (id: string) => {
+  const query = {
+    text: 'SELECT * FROM users WHERE id = $1',
+    values: [id],
+    name: 'get-user-by-id' // Named query for caching
+  }
+  
+  const result = await pool.query(query)
+  return result.rows[0]
+}
+
+// Batch operations
+app.post('/users/batch', async (c) => {
+  const users = await c.req.json()
+  
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    
+    const results = await Promise.all(
+      users.map(user => 
+        client.query(
+          'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
+          [user.name, user.email]
+        )
+      )
+    )
+    
+    await client.query('COMMIT')
+    return c.json(results.map(r => r.rows[0]), 201)
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+})
+```
+
+### Pagination
+
+```typescript
+import { z } from 'zod'
+import { zValidator } from '@hono/zod-validator'
+
+const paginationSchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  cursor: z.string().optional()
+})
+
+// Offset-based pagination
+app.get('/users',
+  zValidator('query', paginationSchema),
+  async (c) => {
+    const { page, limit } = c.req.valid('query')
+    const offset = (page - 1) * limit
+    
+    const [users, totalCount] = await Promise.all([
+      getUsersPaginated(offset, limit),
+      getUsersCount()
+    ])
+    
+    const totalPages = Math.ceil(totalCount / limit)
+    
+    return c.json({
+      data: users,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      }
+    })
+  }
+)
+
+// Cursor-based pagination
+app.get('/posts',
+  zValidator('query', paginationSchema),
+  async (c) => {
+    const { limit, cursor } = c.req.valid('query')
+    
+    const posts = await getPostsAfterCursor(cursor, limit + 1)
+    const hasMore = posts.length > limit
+    
+    if (hasMore) {
+      posts.pop() // Remove the extra item
+    }
+    
+    const nextCursor = hasMore ? posts[posts.length - 1].id : null
+    
+    return c.json({
+      data: posts,
+      pagination: {
+        limit,
+        nextCursor,
+        hasMore
+      }
+    })
+  }
+)
+```
+
+### Performance Monitoring
+
+```typescript
+import { timing } from 'hono/timing'
+
+// Add Server-Timing header
+app.use('*', timing())
+
+// Custom performance monitoring
+const performanceMonitor = async (c: Context, next: Next) => {
+  const start = performance.now()
+  const startMemory = process.memoryUsage()
+  
+  await next()
+  
+  const duration = performance.now() - start
+  const endMemory = process.memoryUsage()
+  
+  // Add performance headers
+  c.header('X-Response-Time', `${duration.toFixed(2)}ms`)
+  c.header('X-Memory-Used', `${(
+    (endMemory.heapUsed - startMemory.heapUsed) / 1024 / 1024
+  ).toFixed(2)}MB`)
+  
+  // Log slow requests
+  if (duration > 1000) {
+    console.warn('Slow request detected:', {
+      path: c.req.path,
+      method: c.req.method,
+      duration: `${duration.toFixed(2)}ms`,
+      memoryDelta: `${(
+        (endMemory.heapUsed - startMemory.heapUsed) / 1024 / 1024
+      ).toFixed(2)}MB`
+    })
+  }
+}
+
+app.use('*', performanceMonitor)
+
+// Request coalescing for identical requests
+const requestCache = new Map<string, Promise<any>>()
+
+const coalesceRequests = (key: string, fn: () => Promise<any>) => {
+  const existing = requestCache.get(key)
+  if (existing) return existing
+  
+  const promise = fn().finally(() => {
+    requestCache.delete(key)
+  })
+  
+  requestCache.set(key, promise)
+  return promise
+}
+
+app.get('/expensive/:id', async (c) => {
+  const id = c.req.param('id')
+  
+  const data = await coalesceRequests(
+    `expensive:${id}`,
+    () => fetchExpensiveData(id)
+  )
+  
+  return c.json(data)
+})
+```
+
+### Lazy Loading & Code Splitting
+
+```typescript
+// Lazy load heavy dependencies
+let heavyLibrary: any
+
+const getHeavyLibrary = async () => {
+  if (!heavyLibrary) {
+    heavyLibrary = await import('heavy-library')
+  }
+  return heavyLibrary
+}
+
+app.post('/process-image', async (c) => {
+  const lib = await getHeavyLibrary()
+  const image = await c.req.blob()
+  const processed = await lib.processImage(image)
+  return c.body(processed)
+})
+
+// Conditional middleware loading
+if (process.env.NODE_ENV === 'production') {
+  const { monitor } = await import('./middleware/monitor')
+  app.use('*', monitor())
+}
+```
+
+### Resource Optimization
+
+```typescript
+// Optimize JSON serialization
+app.get('/data', async (c) => {
+  const data = await getData()
+  
+  // Use streaming for large arrays
+  if (Array.isArray(data) && data.length > 1000) {
+    return c.streamText(async (stream) => {
+      stream.header('Content-Type', 'application/json')
+      await stream.write('[')
+      
+      for (let i = 0; i < data.length; i++) {
+        if (i > 0) await stream.write(',')
+        await stream.write(JSON.stringify(data[i]))
+      }
+      
+      await stream.write(']')
+    })
+  }
+  
+  return c.json(data)
+})
+
+// Debounce/throttle expensive operations
+const throttle = (fn: Function, delay: number) => {
+  let lastCall = 0
+  return (...args: any[]) => {
+    const now = Date.now()
+    if (now - lastCall < delay) {
+      return Promise.resolve({ throttled: true })
+    }
+    lastCall = now
+    return fn(...args)
+  }
+}
+
+const expensiveOperation = throttle(
+  async (data: any) => {
+    // Expensive computation
+    return processData(data)
+  },
+  1000 // Max once per second
+)
+
+app.post('/process', async (c) => {
+  const data = await c.req.json()
+  const result = await expensiveOperation(data)
+  return c.json(result)
+})
+```
+
+### Sources
+
+- [Performance Best Practices](https://hono.dev/docs/guides/best-practices)
+- [Compression Middleware](https://hono.dev/docs/middleware/builtin/compress)
+- [Cache Middleware](https://hono.dev/docs/middleware/builtin/cache)
+- [Timing Middleware](https://hono.dev/docs/middleware/builtin/timing)
+````
+### honojs:routing
+Routing patterns and best practices
+````mdx
+## Routing
+
+### Rules
+
+- Routes MUST be defined using Hono's built-in methods (`get`, `post`, `put`, `delete`, etc.)
+- Route handlers MUST be defined inline or imported from route modules
+- Path parameters MUST use the `:param` syntax
+- Optional parameters MUST use the `:param?` syntax
+- Wildcard routes MUST use the `*` syntax
+- Route grouping MUST use the `app.route()` method
+- Middleware MUST be registered before route handlers
+- Routes MUST be registered in order of specificity (most specific first)
+- AVOID using Ruby on Rails-style controller patterns
+- PREFER inline handlers for better type inference
+
+### Examples
+
+#### Basic Routing
+
+```typescript
+import { Hono } from 'hono'
+
+const app = new Hono()
+
+// Basic routes
+app.get('/', (c) => c.text('Hello Hono!'))
+app.post('/users', (c) => c.json({ message: 'User created' }, 201))
+app.put('/users/:id', (c) => c.json({ message: 'User updated' }))
+app.delete('/users/:id', (c) => c.json({ message: 'User deleted' }))
+
+// Multiple methods
+app.on(['GET', 'POST'], '/endpoint', (c) => {
+  return c.text(`${c.req.method} request`)
+})
+```
+
+#### Path Parameters
+
+```typescript
+// Required parameter
+app.get('/users/:id', (c) => {
+  const id = c.req.param('id')
+  return c.json({ userId: id })
+})
+
+// Optional parameter
+app.get('/posts/:id?', (c) => {
+  const id = c.req.param('id')
+  if (id) {
+    return c.json({ postId: id })
+  }
+  return c.json({ message: 'All posts' })
+})
+
+// Multiple parameters
+app.get('/users/:userId/posts/:postId', (c) => {
+  const { userId, postId } = c.req.param()
+  return c.json({ userId, postId })
+})
+
+// Wildcard
+app.get('/files/*', (c) => {
+  const path = c.req.param('*')
+  return c.text(`File path: ${path}`)
+})
+```
+
+#### Route Grouping
+
+```typescript
+// routes/users.ts
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { createUserSchema, updateUserSchema } from '../validators/user'
+
+const users = new Hono()
+
+users
+  .get('/', (c) => c.json({ users: [] }))
+  .get('/:id', (c) => {
+    const id = c.req.param('id')
+    return c.json({ id })
+  })
+  .post('/', zValidator('json', createUserSchema), (c) => {
+    const data = c.req.valid('json')
+    return c.json(data, 201)
+  })
+  .put('/:id', zValidator('json', updateUserSchema), (c) => {
+    const id = c.req.param('id')
+    const data = c.req.valid('json')
+    return c.json({ id, ...data })
+  })
+  .delete('/:id', (c) => {
+    const id = c.req.param('id')
+    return c.json({ deleted: id })
+  })
+
+export default users
+
+// app.ts
+import users from './routes/users'
+
+app.route('/api/users', users)
+```
+
+#### Chained Routes
+
+```typescript
+const app = new Hono()
+  .get('/posts', (c) => c.json({ posts: [] }))
+  .post('/posts', (c) => c.json({ created: true }, 201))
+  .get('/posts/:id', (c) => {
+    const id = c.req.param('id')
+    return c.json({ id })
+  })
+```
+
+#### Route Precedence
+
+```typescript
+// Specific routes first
+app.get('/users/me', (c) => c.json({ user: 'current' }))
+app.get('/users/:id', (c) => c.json({ id: c.req.param('id') }))
+
+// Middleware before handlers
+app.use('/admin/*', authMiddleware)
+app.get('/admin/dashboard', (c) => c.text('Admin Dashboard'))
+
+// Fallback routes last
+app.get('*', (c) => c.text('Not Found', 404))
+```
+
+### Route Response Methods
+
+```typescript
+// Text response
+app.get('/text', (c) => c.text('Plain text'))
+
+// JSON response
+app.get('/json', (c) => c.json({ key: 'value' }))
+
+// HTML response
+app.get('/html', (c) => c.html('<h1>Hello</h1>'))
+
+// Redirect
+app.get('/redirect', (c) => c.redirect('/destination'))
+
+// Custom status
+app.get('/created', (c) => c.json({ created: true }, 201))
+
+// Stream response
+app.get('/stream', (c) => {
+  return c.streamText(async (stream) => {
+    await stream.write('Hello')
+    await stream.write(' World')
+  })
+})
+```
+
+### Sources
+
+- [Routing Documentation](https://hono.dev/docs/api/routing)
+- [Best Practices](https://hono.dev/docs/guides/best-practices)
+````
+### honojs:rpc
+Type-safe client-server communication
+````mdx
+## RPC (Remote Procedure Call)
+
+### Rules
+
+- RPC routes MUST be chained to maintain type information
+- Client types MUST be generated from server route definitions
+- Type safety MUST be maintained across client-server boundary
+- Route definitions MUST be exported for client generation
+- RPC endpoints SHOULD use consistent naming conventions
+- Error handling MUST be type-safe on both ends
+- Request/response validation MUST be implemented
+- RPC client MUST handle network errors gracefully
+
+### Basic RPC Setup
+
+```typescript
+// server/routes/api.ts
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+
+const userSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email()
+})
+
+const createUserSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email()
+})
+
+// Define API routes with chaining for type inference
+const api = new Hono()
+  .get('/users', (c) => {
+    const users = getUsers()
+    return c.json({ users })
+  })
+  .get('/users/:id', (c) => {
+    const id = c.req.param('id')
+    const user = getUserById(id)
+    if (!user) {
+      return c.json({ error: 'User not found' }, 404)
+    }
+    return c.json({ user })
+  })
+  .post('/users',
+    zValidator('json', createUserSchema),
+    (c) => {
+      const data = c.req.valid('json')
+      const user = createUser(data)
+      return c.json({ user }, 201)
+    }
+  )
+  .put('/users/:id',
+    zValidator('json', createUserSchema.partial()),
+    (c) => {
+      const id = c.req.param('id')
+      const data = c.req.valid('json')
+      const user = updateUser(id, data)
+      return c.json({ user })
+    }
+  )
+  .delete('/users/:id', (c) => {
+    const id = c.req.param('id')
+    deleteUser(id)
+    return c.json({ success: true })
+  })
+
+// Export the type for client generation
+export type ApiType = typeof api
+export default api
+
+// server/index.ts
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import api from './routes/api'
+
+const app = new Hono()
+  .use('*', cors())
+  .route('/api', api)
+
+export default app
+export type AppType = typeof app
+```
+
+### Type-Safe Client
+
+```typescript
+// client/api.ts
+import { hc } from 'hono/client'
+import type { ApiType } from '../server/routes/api'
+
+// Create typed client
+const client = hc<ApiType>('http://localhost:3000/api')
+
+// Usage with full type safety
+export const userApi = {
+  // GET /api/users
+  getUsers: async () => {
+    const res = await client.users.$get()
+    if (!res.ok) {
+      throw new Error('Failed to fetch users')
+    }
+    return await res.json() // Typed as { users: User[] }
+  },
+
+  // GET /api/users/:id
+  getUser: async (id: string) => {
+    const res = await client.users[':id'].$get({
+      param: { id }
+    })
+    if (res.status === 404) {
+      return null
+    }
+    if (!res.ok) {
+      throw new Error('Failed to fetch user')
+    }
+    return await res.json() // Typed as { user: User }
+  },
+
+  // POST /api/users
+  createUser: async (user: { name: string; email: string }) => {
+    const res = await client.users.$post({
+      json: user
+    })
+    if (!res.ok) {
+      const error = await res.json()
+      throw new Error(error.error || 'Failed to create user')
+    }
+    return await res.json() // Typed as { user: User }
+  },
+
+  // PUT /api/users/:id
+  updateUser: async (id: string, updates: Partial<{ name: string; email: string }>) => {
+    const res = await client.users[':id'].$put({
+      param: { id },
+      json: updates
+    })
+    if (!res.ok) {
+      throw new Error('Failed to update user')
+    }
+    return await res.json() // Typed as { user: User }
+  },
+
+  // DELETE /api/users/:id
+  deleteUser: async (id: string) => {
+    const res = await client.users[':id'].$delete({
+      param: { id }
+    })
+    if (!res.ok) {
+      throw new Error('Failed to delete user')
+    }
+    return await res.json() // Typed as { success: boolean }
+  }
+}
+```
+
+### Advanced RPC Patterns
+
+```typescript
+// server/routes/posts.ts
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+
+const postQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(10),
+  author: z.string().optional(),
+  tag: z.string().optional()
+})
+
+const createPostSchema = z.object({
+  title: z.string().min(1),
+  content: z.string().min(1),
+  tags: z.array(z.string()).default([]),
+  published: z.boolean().default(false)
+})
+
+// Complex RPC with nested resources
+const posts = new Hono()
+  // List posts with query parameters
+  .get('/',
+    zValidator('query', postQuerySchema),
+    async (c) => {
+      const query = c.req.valid('query')
+      const { posts, pagination } = await getPosts(query)
+      return c.json({ posts, pagination })
+    }
+  )
+  
+  // Get post by ID
+  .get('/:id', async (c) => {
+    const id = c.req.param('id')
+    const post = await getPostById(id)
+    if (!post) {
+      return c.json({ error: 'Post not found' }, 404)
+    }
+    return c.json({ post })
+  })
+  
+  // Create new post
+  .post('/',
+    zValidator('json', createPostSchema),
+    async (c) => {
+      const data = c.req.valid('json')
+      const post = await createPost(data)
+      return c.json({ post }, 201)
+    }
+  )
+  
+  // Get post comments
+  .get('/:id/comments', async (c) => {
+    const postId = c.req.param('id')
+    const comments = await getPostComments(postId)
+    return c.json({ comments })
+  })
+  
+  // Add comment to post
+  .post('/:id/comments',
+    zValidator('json', z.object({
+      content: z.string().min(1),
+      author: z.string().min(1)
+    })),
+    async (c) => {
+      const postId = c.req.param('id')
+      const data = c.req.valid('json')
+      const comment = await addComment(postId, data)
+      return c.json({ comment }, 201)
+    }
+  )
+
+export type PostsType = typeof posts
+export default posts
+```
+
+### Client with Error Handling
+
+```typescript
+// client/posts.ts
+import { hc } from 'hono/client'
+import type { PostsType } from '../server/routes/posts'
+
+const client = hc<PostsType>('http://localhost:3000/api/posts')
+
+export class PostsApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public details?: any
+  ) {
+    super(message)
+    this.name = 'PostsApiError'
+  }
+}
+
+export const postsApi = {
+  getPosts: async (query?: {
+    page?: number
+    limit?: number
+    author?: string
+    tag?: string
+  }) => {
+    try {
+      const res = await client.$get({
+        query: query ? {
+          page: query.page?.toString(),
+          limit: query.limit?.toString(),
+          author: query.author,
+          tag: query.tag
+        } : undefined
+      })
+      
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }))
+        throw new PostsApiError(
+          error.error || 'Failed to fetch posts',
+          res.status,
+          error
+        )
+      }
+      
+      return await res.json()
+    } catch (error) {
+      if (error instanceof PostsApiError) throw error
+      throw new PostsApiError('Network error', 0, error)
+    }
+  },
+
+  getPost: async (id: string) => {
+    try {
+      const res = await client[':id'].$get({ param: { id } })
+      
+      if (res.status === 404) {
+        return null
+      }
+      
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }))
+        throw new PostsApiError(
+          error.error || 'Failed to fetch post',
+          res.status
+        )
+      }
+      
+      return await res.json()
+    } catch (error) {
+      if (error instanceof PostsApiError) throw error
+      throw new PostsApiError('Network error', 0, error)
+    }
+  },
+
+  createPost: async (post: {
+    title: string
+    content: string
+    tags?: string[]
+    published?: boolean
+  }) => {
+    try {
+      const res = await client.$post({ json: post })
+      
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }))
+        throw new PostsApiError(
+          error.error || 'Failed to create post',
+          res.status,
+          error
+        )
+      }
+      
+      return await res.json()
+    } catch (error) {
+      if (error instanceof PostsApiError) throw error
+      throw new PostsApiError('Network error', 0, error)
+    }
+  }
+}
+```
+
+### RPC with Authentication
+
+```typescript
+// client/authenticated-client.ts
+import { hc } from 'hono/client'
+import type { AppType } from '../server'
+
+export class AuthenticatedClient {
+  private client: ReturnType<typeof hc<AppType>>
+  private token: string | null = null
+
+  constructor(baseUrl: string) {
+    this.client = hc<AppType>(baseUrl)
+  }
+
+  setToken(token: string) {
+    this.token = token
+  }
+
+  private getHeaders() {
+    return this.token ? { Authorization: `Bearer ${this.token}` } : {}
+  }
+
+  async getProfile() {
+    const res = await this.client.auth.me.$get({}, {
+      headers: this.getHeaders()
+    })
+    
+    if (!res.ok) {
+      throw new Error('Failed to get profile')
+    }
+    
+    return await res.json()
+  }
+
+  async updateProfile(data: { name?: string; email?: string }) {
+    const res = await this.client.auth.me.$put({
+      json: data
+    }, {
+      headers: this.getHeaders()
+    })
+    
+    if (!res.ok) {
+      throw new Error('Failed to update profile')
+    }
+    
+    return await res.json()
+  }
+}
+
+// Usage
+const api = new AuthenticatedClient('http://localhost:3000')
+api.setToken('your-jwt-token')
+
+const profile = await api.getProfile()
+await api.updateProfile({ name: 'New Name' })
+```
+
+### RPC Testing
+
+```typescript
+// tests/rpc.test.ts
+import { describe, it, expect, beforeEach } from 'vitest'
+import { testClient } from 'hono/testing'
+import type { AppType } from '../src/app'
+import app from '../src/app'
+
+describe('RPC API', () => {
+  let client: ReturnType<typeof testClient<AppType>>
+  
+  beforeEach(() => {
+    client = testClient(app)
+  })
+  
+  it('should get users with type safety', async () => {
+    const res = await client.api.users.$get()
+    
+    expect(res.status).toBe(200)
+    
+    const data = await res.json()
+    // data is typed as { users: User[] }
+    expect(data).toHaveProperty('users')
+    expect(Array.isArray(data.users)).toBe(true)
+  })
+  
+  it('should create user with validation', async () => {
+    const res = await client.api.users.$post({
+      json: {
+        name: 'Test User',
+        email: 'test@example.com'
+      }
+    })
+    
+    expect(res.status).toBe(201)
+    
+    const data = await res.json()
+    // data is typed as { user: User }
+    expect(data.user).toHaveProperty('id')
+    expect(data.user.name).toBe('Test User')
+  })
+  
+  it('should handle validation errors', async () => {
+    const res = await client.api.users.$post({
+      json: {
+        name: '',
+        email: 'invalid-email'
+      }
+    })
+    
+    expect(res.status).toBe(400)
+    
+    const error = await res.json()
+    expect(error).toHaveProperty('error')
+  })
+})
+```
+
+### React Hook Integration
+
+```typescript
+// hooks/useApi.ts
+import { useState, useEffect } from 'react'
+import { userApi, PostsApiError } from '../client/api'
+
+export function useUsers() {
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    userApi.getUsers()
+      .then(data => {
+        setUsers(data.users)
+        setError(null)
+      })
+      .catch(err => {
+        setError(err.message)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }, [])
+
+  return { users, loading, error }
+}
+
+export function useCreateUser() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const createUser = async (userData: { name: string; email: string }) => {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const result = await userApi.createUser(userData)
+      return result
+    } catch (err) {
+      const message = err instanceof PostsApiError 
+        ? err.message 
+        : 'Failed to create user'
+      setError(message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return { createUser, loading, error }
+}
+```
+
+### Sources
+
+- [RPC Guide](https://hono.dev/docs/guides/rpc)
+- [Client Documentation](https://hono.dev/docs/guides/rpc#client)
+- [Type Safety](https://hono.dev/docs/guides/rpc#type-safety)
+````
+### honojs:security
+Security middleware and best practices
+````mdx
+## Security
+
+### Rules
+
+- Security headers MUST be implemented using secure-headers middleware
+- CORS MUST be properly configured for production environments
+- CSRF protection MUST be enabled for state-changing operations
+- Authentication MUST be implemented for protected routes
+- Input validation MUST be performed on all user inputs
+- Sensitive data MUST NEVER be logged or exposed in responses
+- Rate limiting SHOULD be implemented for public APIs
+- Content Security Policy (CSP) SHOULD be configured
+- HTTPS MUST be enforced in production
+- JWT secrets and API keys MUST be stored in environment variables
+
+### Security Headers
+
+```typescript
+import { secureHeaders } from 'hono/secure-headers'
+
+// Basic security headers
+app.use('*', secureHeaders())
+
+// Custom security headers configuration
+app.use('*', secureHeaders({
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.example.com'],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", 'data:', 'https:'],
+    connectSrc: ["'self'"],
+    fontSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    mediaSrc: ["'self'"],
+    frameSrc: ["'none'"],
+  },
+  crossOriginEmbedderPolicy: 'require-corp',
+  crossOriginOpenerPolicy: 'same-origin',
+  crossOriginResourcePolicy: 'same-origin',
+  originAgentCluster: '?1',
+  referrerPolicy: 'no-referrer',
+  strictTransportSecurity: 'max-age=15552000; includeSubDomains',
+  xContentTypeOptions: 'nosniff',
+  xDnsPrefetchControl: 'off',
+  xDownloadOptions: 'noopen',
+  xFrameOptions: 'SAMEORIGIN',
+  xPermittedCrossDomainPolicies: 'none',
+  xXssProtection: '0',
+  permissionsPolicy: {
+    camera: ['none'],
+    microphone: ['none'],
+    geolocation: ['none']
+  }
+}))
+```
+
+### CORS Configuration
+
+```typescript
+import { cors } from 'hono/cors'
+
+// Development CORS (permissive)
+if (process.env.NODE_ENV === 'development') {
+  app.use('*', cors())
+}
+
+// Production CORS (restrictive)
+app.use('*', cors({
+  origin: (origin) => {
+    const allowedOrigins = [
+      'https://app.example.com',
+      'https://www.example.com'
+    ]
+    return allowedOrigins.includes(origin) ? origin : null
+  },
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+  exposeHeaders: ['X-Response-Time', 'X-Request-ID'],
+  maxAge: 86400,
+  credentials: true
+}))
+
+// API-specific CORS
+app.use('/api/*', cors({
+  origin: 'https://app.example.com',
+  credentials: true
+}))
+```
+
+### CSRF Protection
+
+```typescript
+import { csrf } from 'hono/csrf'
+
+// CSRF protection for state-changing operations
+app.use('*', csrf({
+  origin: ['https://example.com', 'https://app.example.com']
+}))
+
+// Custom CSRF configuration
+app.use('*', csrf({
+  origin: (origin) => {
+    return origin.endsWith('.example.com')
+  }
+}))
+
+// Exclude certain routes from CSRF
+app.use('*', async (c, next) => {
+  // Skip CSRF for webhooks
+  if (c.req.path.startsWith('/webhooks/')) {
+    return next()
+  }
+  
+  return csrf({
+    origin: 'https://example.com'
+  })(c, next)
+})
+```
+
+### Authentication & Authorization
+
+```typescript
+import { sign, verify } from 'hono/jwt'
+import { bearerAuth } from 'hono/bearer-auth'
+import { basicAuth } from 'hono/basic-auth'
+
+// JWT Authentication
+const jwtMiddleware = async (c: Context, next: Next) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  
+  if (!token) {
+    throw new HTTPException(401, { message: 'Token required' })
+  }
+  
+  try {
+    const payload = await verify(token, c.env.JWT_SECRET)
+    c.set('userId', payload.sub)
+    c.set('user', payload)
+    await next()
+  } catch (error) {
+    throw new HTTPException(401, { message: 'Invalid token' })
+  }
+}
+
+// Bearer Token Authentication
+app.use('/api/*', bearerAuth({
+  verifyToken: async (token, c) => {
+    // Verify token against database or cache
+    const valid = await verifyApiToken(token)
+    return valid
+  }
+}))
+
+// Basic Authentication for admin routes
+app.use('/admin/*', basicAuth({
+  username: process.env.ADMIN_USERNAME,
+  password: process.env.ADMIN_PASSWORD,
+  realm: 'Admin Area',
+  invalidUserMessage: 'Invalid credentials'
+}))
+
+// Role-based authorization
+const requireRole = (role: string) => {
+  return async (c: Context, next: Next) => {
+    const user = c.get('user')
+    
+    if (!user || user.role !== role) {
+      throw new HTTPException(403, { 
+        message: 'Insufficient permissions' 
+      })
+    }
+    
+    await next()
+  }
+}
+
+app.get('/admin/users', 
+  jwtMiddleware,
+  requireRole('admin'),
+  (c) => c.json({ users: [] })
+)
+```
+
+### Rate Limiting
+
+```typescript
+// Simple in-memory rate limiter
+const rateLimits = new Map<string, number[]>()
+
+const rateLimit = (options: {
+  windowMs: number
+  max: number
+  keyGenerator?: (c: Context) => string
+}) => {
+  return async (c: Context, next: Next) => {
+    const key = options.keyGenerator?.(c) || 
+      c.req.header('x-forwarded-for') || 
+      'global'
+    
+    const now = Date.now()
+    const windowStart = now - options.windowMs
+    
+    const requests = rateLimits.get(key) || []
+    const recentRequests = requests.filter(time => time > windowStart)
+    
+    if (recentRequests.length >= options.max) {
+      const retryAfter = Math.ceil(
+        (recentRequests[0] + options.windowMs - now) / 1000
+      )
+      
+      c.header('X-RateLimit-Limit', options.max.toString())
+      c.header('X-RateLimit-Remaining', '0')
+      c.header('X-RateLimit-Reset', new Date(
+        recentRequests[0] + options.windowMs
+      ).toISOString())
+      c.header('Retry-After', retryAfter.toString())
+      
+      return c.json(
+        { error: 'Too many requests' },
+        429
+      )
+    }
+    
+    recentRequests.push(now)
+    rateLimits.set(key, recentRequests)
+    
+    c.header('X-RateLimit-Limit', options.max.toString())
+    c.header('X-RateLimit-Remaining', 
+      (options.max - recentRequests.length).toString()
+    )
+    
+    await next()
+  }
+}
+
+// Apply rate limiting
+app.use('/api/*', rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per window
+  keyGenerator: (c) => {
+    // Rate limit by API key or IP
+    return c.req.header('X-API-Key') || 
+           c.req.header('x-forwarded-for') || 
+           'anonymous'
+  }
+}))
+
+// Stricter rate limit for auth endpoints
+app.use('/auth/*', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5 // Only 5 attempts per 15 minutes
+}))
+```
+
+### Input Sanitization
+
+```typescript
+import DOMPurify from 'isomorphic-dompurify'
+
+// HTML sanitization middleware
+const sanitizeHtml = async (c: Context, next: Next) => {
+  if (c.req.method === 'POST' || c.req.method === 'PUT') {
+    const contentType = c.req.header('content-type')
+    
+    if (contentType?.includes('application/json')) {
+      const body = await c.req.json()
+      
+      // Recursively sanitize all string values
+      const sanitize = (obj: any): any => {
+        if (typeof obj === 'string') {
+          return DOMPurify.sanitize(obj)
+        }
+        if (Array.isArray(obj)) {
+          return obj.map(sanitize)
+        }
+        if (obj && typeof obj === 'object') {
+          return Object.keys(obj).reduce((acc, key) => {
+            acc[key] = sanitize(obj[key])
+            return acc
+          }, {} as any)
+        }
+        return obj
+      }
+      
+      c.req.json = async () => sanitize(body)
+    }
+  }
+  
+  await next()
+}
+
+app.use('*', sanitizeHtml)
+
+// SQL injection prevention (use parameterized queries)
+app.get('/users', async (c) => {
+  const name = c.req.query('name')
+  
+  // NEVER do this:
+  // const users = await db.query(`SELECT * FROM users WHERE name = '${name}'`)
+  
+  // DO this instead:
+  const users = await db.query(
+    'SELECT * FROM users WHERE name = ?',
+    [name]
+  )
+  
+  return c.json(users)
+})
+```
+
+### Secret Management
+
+```typescript
+// Environment variable validation
+const validateEnv = () => {
+  const required = [
+    'JWT_SECRET',
+    'DATABASE_URL',
+    'API_KEY',
+    'ENCRYPTION_KEY'
+  ]
+  
+  const missing = required.filter(key => !process.env[key])
+  
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables: ${missing.join(', ')}`
+    )
+  }
+  
+  // Validate secret strength
+  if (process.env.JWT_SECRET.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters')
+  }
+}
+
+// Call during app initialization
+validateEnv()
+
+// Secure cookie configuration
+import { setCookie } from 'hono/cookie'
+
+app.post('/auth/login', async (c) => {
+  const token = await generateToken()
+  
+  setCookie(c, 'token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Strict',
+    maxAge: 60 * 60 * 24 * 7, // 1 week
+    path: '/'
+  })
+  
+  return c.json({ success: true })
+})
+```
+
+### Security Monitoring
+
+```typescript
+// Security event logging
+const securityLogger = async (c: Context, next: Next) => {
+  const start = Date.now()
+  
+  try {
+    await next()
+  } catch (error) {
+    if (error instanceof HTTPException) {
+      if (error.status === 401 || error.status === 403) {
+        // Log security events
+        console.warn('Security event:', {
+          type: error.status === 401 ? 'authentication' : 'authorization',
+          path: c.req.path,
+          method: c.req.method,
+          ip: c.req.header('x-forwarded-for'),
+          userAgent: c.req.header('user-agent'),
+          timestamp: new Date().toISOString()
+        })
+      }
+    }
+    throw error
+  }
+  
+  // Log suspicious activity
+  const duration = Date.now() - start
+  if (duration > 5000) {
+    console.warn('Slow request detected:', {
+      path: c.req.path,
+      duration,
+      ip: c.req.header('x-forwarded-for')
+    })
+  }
+}
+
+app.use('*', securityLogger)
+```
+
+### Sources
+
+- [Security Headers](https://hono.dev/docs/middleware/builtin/secure-headers)
+- [CORS Middleware](https://hono.dev/docs/middleware/builtin/cors)
+- [CSRF Protection](https://hono.dev/docs/middleware/builtin/csrf)
+- [JWT Authentication](https://hono.dev/docs/middleware/builtin/jwt)
+- [OWASP Security Guidelines](https://owasp.org/www-project-top-ten/)
+````
+### honojs:structure
+Guidelines for organizing Hono.js applications
+````mdx
+## Project Structure
+
+### Recommended Structure
+
+```
+root/
+├── src/
+│   ├── index.ts          # Main application entry point
+│   ├── app.ts            # Hono app instance and configuration
+│   ├── routes/           # Route modules
+│   │   ├── users.ts      # User routes
+│   │   ├── posts.ts      # Post routes
+│   │   └── auth.ts       # Authentication routes
+│   ├── middleware/       # Custom middleware
+│   │   ├── auth.ts       # Authentication middleware
+│   │   ├── logger.ts     # Logging middleware
+│   │   └── cors.ts       # CORS configuration
+│   ├── validators/       # Validation schemas
+│   │   ├── user.ts       # User validation schemas
+│   │   └── post.ts       # Post validation schemas
+│   ├── lib/              # Shared utilities and helpers
+│   │   ├── db.ts         # Database connection
+│   │   └── utils.ts      # Utility functions
+│   └── types/            # TypeScript type definitions
+│       └── index.ts      # Shared types
+├── tests/                # Test files
+│   ├── unit/             # Unit tests
+│   └── integration/      # Integration tests
+├── dist/                 # Compiled output (generated)
+├── .env                  # Environment variables
+├── .env.example          # Environment variables example
+├── package.json          # Dependencies and scripts
+├── tsconfig.json         # TypeScript configuration
+└── wrangler.toml         # Cloudflare Workers config (if applicable)
+```
+
+### Rules
+
+- The main application instance MUST be created in `src/app.ts` and exported
+- Routes MUST be organized in separate files within `src/routes/`
+- Custom middleware MUST be placed in `src/middleware/`
+- Validation schemas MUST be placed in `src/validators/`
+- Shared utilities and helpers MUST be placed in `src/lib/`
+- TypeScript type definitions MUST be placed in `src/types/`
+- Environment-specific configuration MUST use `.env` files
+- NEVER commit `.env` files to version control
+- ALWAYS provide `.env.example` with dummy values
+
+### Examples
+
+#### Main Entry Point (src/index.ts)
+
+```typescript
+import { serve } from '@hono/node-server'
+import app from './app'
+
+const port = process.env.PORT || 3000
+
+serve({
+  fetch: app.fetch,
+  port: Number(port)
+})
+
+console.log(`Server running on port ${port}`)
+```
+
+#### App Configuration (src/app.ts)
+
+```typescript
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import { logger } from 'hono/logger'
+import users from './routes/users'
+import posts from './routes/posts'
+
+const app = new Hono()
+
+// Global middleware
+app.use('*', logger())
+app.use('*', cors())
+
+// Route mounting
+app.route('/api/users', users)
+app.route('/api/posts', posts)
+
+// Health check
+app.get('/health', (c) => c.json({ status: 'ok' }))
+
+export default app
+```
+
+### Sources
+
+- [Hono.js Documentation](https://hono.dev/docs)
+- [Best Practices Guide](https://hono.dev/docs/guides/best-practices)
+````
+### honojs:testing
+Testing strategies and best practices
+````mdx
+## Testing
+
+### Rules
+
+- Unit tests MUST be written for all business logic
+- Integration tests MUST be written for API endpoints
+- Test files MUST be colocated with source files or in a `tests/` directory
+- Test coverage SHOULD be maintained above 80%
+- Mocking SHOULD be used for external dependencies
+- Test data MUST NOT contain real user information
+- Tests MUST be isolated and not depend on execution order
+- E2E tests SHOULD cover critical user flows
+- Performance tests SHOULD be included for critical endpoints
+
+### Test Setup
+
+```typescript
+// vitest.config.ts
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: [
+        'node_modules/',
+        'tests/',
+        '*.config.ts'
+      ]
+    },
+    setupFiles: ['./tests/setup.ts']
+  },
+  resolve: {
+    alias: {
+      '@': '/src'
+    }
+  }
+})
+
+// tests/setup.ts
+import { beforeAll, afterAll, beforeEach } from 'vitest'
+
+beforeAll(() => {
+  // Global setup
+  process.env.NODE_ENV = 'test'
+  process.env.JWT_SECRET = 'test-secret'
+})
+
+beforeEach(() => {
+  // Reset mocks before each test
+  vi.clearAllMocks()
+})
+
+afterAll(() => {
+  // Cleanup
+})
+```
+
+### Unit Testing
+
+```typescript
+// src/lib/utils.test.ts
+import { describe, it, expect } from 'vitest'
+import { formatDate, calculatePrice, validateEmail } from './utils'
+
+describe('Utils', () => {
+  describe('formatDate', () => {
+    it('should format date correctly', () => {
+      const date = new Date('2024-01-15T10:30:00Z')
+      expect(formatDate(date)).toBe('2024-01-15')
+    })
+    
+    it('should handle invalid dates', () => {
+      expect(formatDate(null)).toBe('')
+      expect(formatDate(undefined)).toBe('')
+    })
+  })
+  
+  describe('calculatePrice', () => {
+    it('should calculate price with tax', () => {
+      expect(calculatePrice(100, 0.1)).toBe(110)
+    })
+    
+    it('should handle negative values', () => {
+      expect(() => calculatePrice(-100, 0.1)).toThrow('Invalid price')
+    })
+  })
+  
+  describe('validateEmail', () => {
+    it.each([
+      ['user@example.com', true],
+      ['user+tag@example.co.uk', true],
+      ['invalid.email', false],
+      ['@example.com', false],
+      ['user@', false]
+    ])('validates %s as %s', (email, expected) => {
+      expect(validateEmail(email)).toBe(expected)
+    })
+  })
+})
+```
+
+### API Testing
+
+```typescript
+// src/routes/users.test.ts
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { Hono } from 'hono'
+import { testClient } from 'hono/testing'
+import users from './users'
+import * as db from '@/lib/db'
+
+// Mock database
+vi.mock('@/lib/db')
+
+describe('Users API', () => {
+  let app: Hono
+  
+  beforeEach(() => {
+    app = new Hono()
+    app.route('/users', users)
+  })
+  
+  describe('GET /users', () => {
+    it('should return all users', async () => {
+      const mockUsers = [
+        { id: '1', name: 'Alice', email: 'alice@example.com' },
+        { id: '2', name: 'Bob', email: 'bob@example.com' }
+      ]
+      
+      vi.mocked(db.getUsers).mockResolvedValue(mockUsers)
+      
+      const res = await app.request('/users')
+      
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data).toEqual(mockUsers)
+      expect(db.getUsers).toHaveBeenCalledOnce()
+    })
+    
+    it('should handle pagination', async () => {
+      const res = await app.request('/users?page=2&limit=10')
+      
+      expect(res.status).toBe(200)
+      expect(db.getUsers).toHaveBeenCalledWith({ 
+        offset: 10, 
+        limit: 10 
+      })
+    })
+  })
+  
+  describe('POST /users', () => {
+    it('should create a new user', async () => {
+      const newUser = { 
+        name: 'Charlie', 
+        email: 'charlie@example.com' 
+      }
+      
+      const createdUser = { id: '3', ...newUser }
+      vi.mocked(db.createUser).mockResolvedValue(createdUser)
+      
+      const res = await app.request('/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      })
+      
+      expect(res.status).toBe(201)
+      const data = await res.json()
+      expect(data).toEqual(createdUser)
+    })
+    
+    it('should validate input', async () => {
+      const invalidUser = { name: '', email: 'invalid' }
+      
+      const res = await app.request('/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(invalidUser)
+      })
+      
+      expect(res.status).toBe(400)
+      const error = await res.json()
+      expect(error).toHaveProperty('error')
+    })
+  })
+  
+  describe('PUT /users/:id', () => {
+    it('should update an existing user', async () => {
+      const update = { name: 'Alice Updated' }
+      const updated = { id: '1', name: 'Alice Updated', email: 'alice@example.com' }
+      
+      vi.mocked(db.updateUser).mockResolvedValue(updated)
+      
+      const res = await app.request('/users/1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(update)
+      })
+      
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data).toEqual(updated)
+    })
+    
+    it('should return 404 for non-existent user', async () => {
+      vi.mocked(db.updateUser).mockResolvedValue(null)
+      
+      const res = await app.request('/users/999', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Test' })
+      })
+      
+      expect(res.status).toBe(404)
+    })
+  })
+  
+  describe('DELETE /users/:id', () => {
+    it('should delete a user', async () => {
+      vi.mocked(db.deleteUser).mockResolvedValue(true)
+      
+      const res = await app.request('/users/1', {
+        method: 'DELETE'
+      })
+      
+      expect(res.status).toBe(204)
+      expect(db.deleteUser).toHaveBeenCalledWith('1')
+    })
+  })
+})
+```
+
+### Authentication Testing
+
+```typescript
+// src/middleware/auth.test.ts
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { Hono } from 'hono'
+import { sign } from 'hono/jwt'
+import { authMiddleware } from './auth'
+
+describe('Auth Middleware', () => {
+  let app: Hono
+  
+  beforeEach(() => {
+    app = new Hono()
+    app.use('*', authMiddleware)
+    app.get('/protected', (c) => c.json({ success: true }))
+  })
+  
+  it('should allow access with valid token', async () => {
+    const token = await sign(
+      { sub: 'user123', role: 'user' },
+      'test-secret'
+    )
+    
+    const res = await app.request('/protected', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data).toEqual({ success: true })
+  })
+  
+  it('should deny access without token', async () => {
+    const res = await app.request('/protected')
+    
+    expect(res.status).toBe(401)
+    const error = await res.json()
+    expect(error).toHaveProperty('error')
+  })
+  
+  it('should deny access with invalid token', async () => {
+    const res = await app.request('/protected', {
+      headers: { Authorization: 'Bearer invalid-token' }
+    })
+    
+    expect(res.status).toBe(401)
+  })
+  
+  it('should deny access with expired token', async () => {
+    const token = await sign(
+      { sub: 'user123', exp: Math.floor(Date.now() / 1000) - 3600 },
+      'test-secret'
+    )
+    
+    const res = await app.request('/protected', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    
+    expect(res.status).toBe(401)
+  })
+})
+```
+
+### Integration Testing
+
+```typescript
+// tests/integration/workflow.test.ts
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { Hono } from 'hono'
+import app from '@/app'
+import { setupTestDatabase, teardownTestDatabase } from '../helpers'
+
+describe('User Workflow Integration', () => {
+  let testUserId: string
+  let authToken: string
+  
+  beforeAll(async () => {
+    await setupTestDatabase()
+  })
+  
+  afterAll(async () => {
+    await teardownTestDatabase()
+  })
+  
+  it('should complete full user workflow', async () => {
+    // 1. Register user
+    const registerRes = await app.request('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'test@example.com',
+        password: 'Test123!',
+        name: 'Test User'
+      })
+    })
+    
+    expect(registerRes.status).toBe(201)
+    const { user, token } = await registerRes.json()
+    testUserId = user.id
+    authToken = token
+    
+    // 2. Login
+    const loginRes = await app.request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'test@example.com',
+        password: 'Test123!'
+      })
+    })
+    
+    expect(loginRes.status).toBe(200)
+    
+    // 3. Get profile
+    const profileRes = await app.request('/users/me', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    })
+    
+    expect(profileRes.status).toBe(200)
+    const profile = await profileRes.json()
+    expect(profile.email).toBe('test@example.com')
+    
+    // 4. Update profile
+    const updateRes = await app.request('/users/me', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ name: 'Updated Name' })
+    })
+    
+    expect(updateRes.status).toBe(200)
+    
+    // 5. Delete account
+    const deleteRes = await app.request('/users/me', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` }
+    })
+    
+    expect(deleteRes.status).toBe(204)
+    
+    // 6. Verify deletion
+    const verifyRes = await app.request('/users/me', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    })
+    
+    expect(verifyRes.status).toBe(401)
+  })
+})
+```
+
+### Performance Testing
+
+```typescript
+// tests/performance/load.test.ts
+import { describe, it, expect } from 'vitest'
+import app from '@/app'
+
+describe('Performance Tests', () => {
+  it('should handle concurrent requests', async () => {
+    const requests = Array.from({ length: 100 }, () =>
+      app.request('/health')
+    )
+    
+    const start = performance.now()
+    const responses = await Promise.all(requests)
+    const duration = performance.now() - start
+    
+    expect(responses.every(r => r.status === 200)).toBe(true)
+    expect(duration).toBeLessThan(1000) // Should complete within 1 second
+  })
+  
+  it('should maintain response time under load', async () => {
+    const times: number[] = []
+    
+    for (let i = 0; i < 50; i++) {
+      const start = performance.now()
+      await app.request('/api/data')
+      times.push(performance.now() - start)
+    }
+    
+    const avgTime = times.reduce((a, b) => a + b, 0) / times.length
+    const maxTime = Math.max(...times)
+    
+    expect(avgTime).toBeLessThan(100) // Average under 100ms
+    expect(maxTime).toBeLessThan(500) // Max under 500ms
+  })
+})
+```
+
+### Test Utilities
+
+```typescript
+// tests/helpers/index.ts
+import { Hono } from 'hono'
+import { sign } from 'hono/jwt'
+
+export const createTestApp = () => {
+  const app = new Hono()
+  // Add common test middleware
+  return app
+}
+
+export const createAuthToken = async (payload: any) => {
+  return sign(
+    { ...payload, exp: Math.floor(Date.now() / 1000) + 3600 },
+    process.env.JWT_SECRET || 'test-secret'
+  )
+}
+
+export const createMockUser = (overrides = {}) => ({
+  id: 'test-id',
+  email: 'test@example.com',
+  name: 'Test User',
+  role: 'user',
+  createdAt: new Date(),
+  ...overrides
+})
+
+export const waitFor = (ms: number) => 
+  new Promise(resolve => setTimeout(resolve, ms))
+
+export class TestDatabase {
+  private data = new Map()
+  
+  async get(key: string) {
+    return this.data.get(key)
+  }
+  
+  async set(key: string, value: any) {
+    this.data.set(key, value)
+  }
+  
+  async clear() {
+    this.data.clear()
+  }
+}
+```
+
+### Sources
+
+- [Testing with Hono](https://hono.dev/docs/guides/testing)
+- [Vitest Documentation](https://vitest.dev)
+- [Jest Documentation](https://jestjs.io)
+````
+### honojs:typescript
+TypeScript configuration and type safety
+````mdx
+## TypeScript
+
+### Rules
+
+- TypeScript MUST be used for all Hono.js applications
+- Strict mode MUST be enabled in tsconfig.json
+- Type inference SHOULD be leveraged wherever possible
+- Explicit type annotations SHOULD be used for function parameters and return types
+- Generic types MUST be used for better type safety with Context
+- Custom types MUST be defined in `src/types/` directory
+- Environment variables MUST be typed
+- NEVER use `any` type unless absolutely necessary
+- ALWAYS use type-safe validator outputs
+
+### TypeScript Configuration
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["@cloudflare/workers-types", "node"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+### Type-Safe Context Variables
+
+```typescript
+// src/types/index.ts
+export type Bindings = {
+  DATABASE_URL: string
+  JWT_SECRET: string
+  API_KEY: string
+}
+
+export type Variables = {
+  userId: string
+  user: {
+    id: string
+    email: string
+    role: 'admin' | 'user'
+  }
+  requestId: string
+}
+
+// src/app.ts
+import { Hono } from 'hono'
+import type { Bindings, Variables } from './types'
+
+const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
+
+// Now context is fully typed
+app.use('*', async (c, next) => {
+  // c.env.DATABASE_URL is typed as string
+  const dbUrl = c.env.DATABASE_URL
+  
+  // Setting variables with type safety
+  c.set('requestId', crypto.randomUUID())
+  
+  await next()
+})
+
+app.get('/profile', (c) => {
+  // Getting variables with type safety
+  const user = c.get('user') // Typed as { id: string, email: string, role: 'admin' | 'user' }
+  return c.json(user)
+})
+```
+
+### Type-Safe Route Handlers
+
+```typescript
+// Define response types
+type UserResponse = {
+  id: string
+  name: string
+  email: string
+  createdAt: string
+}
+
+type ErrorResponse = {
+  error: string
+  code: number
+}
+
+// Type-safe handler with explicit return type
+const getUser = async (c: Context): Promise<Response> => {
+  const id = c.req.param('id')
+  const user = await findUser(id)
+  
+  if (!user) {
+    return c.json<ErrorResponse>(
+      { error: 'User not found', code: 404 },
+      404
+    )
+  }
+  
+  return c.json<UserResponse>(user)
+}
+
+app.get('/users/:id', getUser)
+```
+
+### Generic Type Patterns
+
+```typescript
+// Generic middleware factory
+function createAuthMiddleware<T extends { role: string }>() {
+  return async (c: Context, next: Next) => {
+    const user = await authenticate(c.req.header('Authorization'))
+    if (!user) {
+      throw new HTTPException(401)
+    }
+    c.set('user', user as T)
+    await next()
+  }
+}
+
+// Generic response wrapper
+type ApiResponse<T> = {
+  success: boolean
+  data?: T
+  error?: string
+  timestamp: string
+}
+
+function createResponse<T>(data?: T, error?: string): ApiResponse<T> {
+  return {
+    success: !error,
+    data,
+    error,
+    timestamp: new Date().toISOString()
+  }
+}
+
+app.get('/users', async (c) => {
+  const users = await getUsers()
+  return c.json(createResponse(users))
+})
+```
+
+### Type-Safe Validation
+
+```typescript
+import { z } from 'zod'
+import { zValidator } from '@hono/zod-validator'
+
+// Define schema and infer types
+const userSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+  age: z.number().min(18)
+})
+
+type User = z.infer<typeof userSchema>
+
+// Type-safe route with validation
+app.post('/users',
+  zValidator('json', userSchema),
+  async (c) => {
+    // data is fully typed as User
+    const data = c.req.valid('json')
+    
+    const user = await createUser(data)
+    return c.json<User>(user, 201)
+  }
+)
+```
+
+### Factory Pattern with Types
+
+```typescript
+import { createFactory } from 'hono/factory'
+import type { Bindings, Variables } from './types'
+
+const factory = createFactory<{
+  Bindings: Bindings
+  Variables: Variables
+}>()
+
+// Create typed middleware
+export const authMiddleware = factory.createMiddleware(async (c, next) => {
+  const token = c.req.header('Authorization')
+  if (!token) {
+    throw new HTTPException(401)
+  }
+  
+  const user = await verifyToken(token, c.env.JWT_SECRET)
+  c.set('user', user)
+  await next()
+})
+
+// Create typed handlers
+export const getUserHandler = factory.createHandlers(async (c) => {
+  const user = c.get('user') // Fully typed
+  return c.json(user)
+})
+```
+
+### Type-Safe RPC
+
+```typescript
+// server.ts
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { z } from 'zod'
+
+const app = new Hono()
+
+const routes = app
+  .get('/users', (c) => c.json({ users: [] }))
+  .get('/users/:id', (c) => c.json({ id: c.req.param('id') }))
+  .post('/users',
+    zValidator('json', z.object({
+      name: z.string(),
+      email: z.string().email()
+    })),
+    (c) => {
+      const user = c.req.valid('json')
+      return c.json(user, 201)
+    }
+  )
+
+export type AppType = typeof routes
+
+// client.ts
+import { hc } from 'hono/client'
+import type { AppType } from './server'
+
+const client = hc<AppType>('http://localhost:3000')
+
+// Fully typed client calls
+const response = await client.users.$get()
+const data = await response.json() // data.users is typed
+
+const createResponse = await client.users.$post({
+  json: { name: 'John', email: 'john@example.com' }
+})
+```
+
+### Environment Variables Typing
+
+```typescript
+// src/types/env.ts
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      NODE_ENV: 'development' | 'production' | 'test'
+      PORT: string
+      DATABASE_URL: string
+      JWT_SECRET: string
+      API_KEY: string
+    }
+  }
+}
+
+// For Cloudflare Workers
+interface Env {
+  DATABASE: D1Database
+  KV: KVNamespace
+  R2: R2Bucket
+  JWT_SECRET: string
+}
+
+const app = new Hono<{ Bindings: Env }>()
+
+app.get('/data', async (c) => {
+  // All bindings are typed
+  const db = c.env.DATABASE
+  const kv = c.env.KV
+  const secret = c.env.JWT_SECRET
+  
+  return c.json({ success: true })
+})
+```
+
+### Utility Types
+
+```typescript
+// Common utility types
+type Nullable<T> = T | null
+type Optional<T> = T | undefined
+type AsyncResponse<T> = Promise<Response | T>
+
+// API types
+type PaginatedResponse<T> = {
+  data: T[]
+  page: number
+  limit: number
+  total: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+type SortOrder = 'asc' | 'desc'
+
+type QueryParams = {
+  page?: number
+  limit?: number
+  sort?: string
+  order?: SortOrder
+}
+
+// Database types
+type Timestamps = {
+  createdAt: Date
+  updatedAt: Date
+}
+
+type SoftDelete = {
+  deletedAt: Date | null
+}
+
+type BaseEntity = Timestamps & SoftDelete & {
+  id: string
+}
+
+// User entity example
+interface User extends BaseEntity {
+  email: string
+  name: string
+  role: 'admin' | 'user'
+}
+```
+
+### Type Guards
+
+```typescript
+// Custom type guards
+function isUser(value: unknown): value is User {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'email' in value &&
+    'role' in value
+  )
+}
+
+function isError(value: unknown): value is Error {
+  return value instanceof Error
+}
+
+// Usage in handlers
+app.get('/current-user', async (c) => {
+  const data = c.get('user')
+  
+  if (!isUser(data)) {
+    throw new HTTPException(401, { message: 'Invalid user data' })
+  }
+  
+  // data is now typed as User
+  return c.json(data)
+})
+```
+
+### Sources
+
+- [TypeScript Support](https://hono.dev/docs/getting-started/basic#typescript)
+- [Type Safety Guide](https://hono.dev/docs/guides/typescript)
+- [RPC Mode](https://hono.dev/docs/guides/rpc)
+````
+### honojs:validation
+Input validation with Zod and custom validators
+````mdx
+## Validation
+
+### Rules
+
+- Input validation MUST be performed using validators
+- Zod SHOULD be used as the primary validation library
+- Validators MUST be applied as middleware before handlers
+- Validation targets include: `json`, `query`, `header`, `param`, `cookie`, and `form`
+- Validation errors MUST return appropriate error messages
+- JSON validation REQUIRES `Content-Type: application/json` header
+- Header names MUST be lowercase when validating
+- Validation schemas MUST be stored in `src/validators/` directory
+- Custom validators MUST return validated and typed data
+
+### Zod Validation
+
+#### Installation
+
+```bash
+npm install zod @hono/zod-validator
+```
+
+#### Basic Zod Validation
+
+```typescript
+// src/validators/user.ts
+import { z } from 'zod'
+
+export const createUserSchema = z.object({
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  age: z.number().min(18).max(120),
+  role: z.enum(['user', 'admin']).default('user')
+})
+
+export const updateUserSchema = createUserSchema.partial()
+
+export const userQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(10),
+  sort: z.enum(['name', 'email', 'createdAt']).optional()
+})
+
+export type CreateUser = z.infer<typeof createUserSchema>
+export type UpdateUser = z.infer<typeof updateUserSchema>
+```
+
+#### Using Zod Validator
+
+```typescript
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { createUserSchema, updateUserSchema, userQuerySchema } from './validators/user'
+
+const app = new Hono()
+
+// JSON body validation
+app.post('/users',
+  zValidator('json', createUserSchema),
+  (c) => {
+    const user = c.req.valid('json')
+    // user is fully typed as CreateUser
+    return c.json({ user }, 201)
+  }
+)
+
+// Query parameter validation
+app.get('/users',
+  zValidator('query', userQuerySchema),
+  (c) => {
+    const { page, limit, sort } = c.req.valid('query')
+    return c.json({ page, limit, sort })
+  }
+)
+
+// Multiple validations
+app.put('/users/:id',
+  zValidator('param', z.object({ id: z.string().uuid() })),
+  zValidator('json', updateUserSchema),
+  (c) => {
+    const { id } = c.req.valid('param')
+    const data = c.req.valid('json')
+    return c.json({ id, ...data })
+  }
+)
+```
+
+### Custom Validators
+
+```typescript
+import { validator } from 'hono/validator'
+
+// Custom form validation
+app.post('/upload',
+  validator('form', (value, c) => {
+    const { file, description } = value
+    
+    if (!file || typeof file !== 'object') {
+      return c.text('File is required', 400)
+    }
+    
+    if (file.size > 5 * 1024 * 1024) {
+      return c.text('File too large (max 5MB)', 400)
+    }
+    
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      return c.text('Invalid file type', 400)
+    }
+    
+    return {
+      file,
+      description: description || 'No description'
+    }
+  }),
+  async (c) => {
+    const { file, description } = c.req.valid('form')
+    // Process the validated file
+    return c.json({ uploaded: true })
+  }
+)
+
+// Custom header validation
+app.get('/api/data',
+  validator('header', (value, c) => {
+    const apiKey = value['x-api-key']
+    
+    if (!apiKey) {
+      return c.json({ error: 'API key required' }, 401)
+    }
+    
+    if (!apiKey.startsWith('sk_')) {
+      return c.json({ error: 'Invalid API key format' }, 401)
+    }
+    
+    return { apiKey }
+  }),
+  (c) => {
+    const { apiKey } = c.req.valid('header')
+    return c.json({ authenticated: true })
+  }
+)
+```
+
+### Validation Error Handling
+
+```typescript
+import { z } from 'zod'
+import { zValidator } from '@hono/zod-validator'
+
+// Custom error formatting
+const validationHook = (result: any, c: any) => {
+  if (!result.success) {
+    return c.json(
+      {
+        error: 'Validation failed',
+        details: result.error.flatten()
+      },
+      400
+    )
+  }
+}
+
+app.post('/users',
+  zValidator('json', createUserSchema, validationHook),
+  (c) => {
+    const user = c.req.valid('json')
+    return c.json({ user }, 201)
+  }
+)
+
+// Global error handler for validation
+app.onError((err, c) => {
+  if (err instanceof z.ZodError) {
+    return c.json(
+      {
+        error: 'Validation error',
+        issues: err.issues
+      },
+      400
+    )
+  }
+  return c.json({ error: 'Internal server error' }, 500)
+})
+```
+
+### Complex Validation Scenarios
+
+```typescript
+// Conditional validation
+const registrationSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  accountType: z.enum(['personal', 'business']),
+  companyName: z.string().optional()
+}).refine(
+  (data) => {
+    if (data.accountType === 'business' && !data.companyName) {
+      return false
+    }
+    return true
+  },
+  {
+    message: 'Company name is required for business accounts',
+    path: ['companyName']
+  }
+)
+
+// Date validation with transformation
+const eventSchema = z.object({
+  title: z.string(),
+  startDate: z.string().transform((str) => new Date(str)),
+  endDate: z.string().transform((str) => new Date(str))
+}).refine(
+  (data) => data.endDate > data.startDate,
+  {
+    message: 'End date must be after start date',
+    path: ['endDate']
+  }
+)
+
+// Array validation
+const bulkCreateSchema = z.object({
+  users: z.array(createUserSchema).min(1).max(100)
+})
+
+app.post('/users/bulk',
+  zValidator('json', bulkCreateSchema),
+  (c) => {
+    const { users } = c.req.valid('json')
+    return c.json({ created: users.length }, 201)
+  }
+)
+```
+
+### Validation Composition
+
+```typescript
+// Reusable validation middleware
+const paginationValidator = zValidator('query', z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(10)
+}))
+
+const authValidator = validator('header', (value, c) => {
+  const token = value['authorization']
+  if (!token?.startsWith('Bearer ')) {
+    return c.json({ error: 'Invalid token' }, 401)
+  }
+  return { token: token.replace('Bearer ', '') }
+})
+
+// Use composed validators
+app.get('/protected/users',
+  authValidator,
+  paginationValidator,
+  (c) => {
+    const { token } = c.req.valid('header')
+    const { page, limit } = c.req.valid('query')
+    return c.json({ page, limit, authenticated: true })
+  }
+)
+```
+
+### Sources
+
+- [Validation Documentation](https://hono.dev/docs/guides/validation)
+- [Zod Validator](https://github.com/honojs/middleware/tree/main/packages/zod-validator)
+- [Zod Documentation](https://zod.dev)
+````
+### honojs:websockets
+WebSocket handling and real-time features
+````mdx
+## WebSockets
+
+### Rules
+
+- WebSocket connections MUST be properly authenticated when required
+- Connection lifecycle events MUST be handled (open, message, close, error)
+- Message validation MUST be implemented for incoming WebSocket messages
+- Connection state MUST be managed efficiently
+- Broadcast mechanisms SHOULD be implemented for multi-client scenarios
+- Rate limiting SHOULD be applied to WebSocket messages
+- Graceful disconnection MUST be handled
+- WebSocket endpoints SHOULD be separate from HTTP routes
+- Memory usage MUST be monitored for long-lived connections
+
+### Basic WebSocket Setup
+
+```typescript
+// src/websocket.ts
+import { Hono } from 'hono'
+import { upgradeWebSocket } from 'hono/cloudflare-workers'
+
+const app = new Hono()
+
+// WebSocket upgrade endpoint
+app.get('/ws',
+  upgradeWebSocket((c) => {
+    return {
+      onOpen(event, ws) {
+        console.log('Connection opened')
+        ws.send('Welcome to the WebSocket server!')
+      },
+      
+      onMessage(event, ws) {
+        const message = event.data.toString()
+        console.log(`Received: ${message}`)
+        
+        // Echo the message back
+        ws.send(`Echo: ${message}`)
+      },
+      
+      onClose(event, ws) {
+        console.log('Connection closed')
+      },
+      
+      onError(event, ws) {
+        console.error('WebSocket error:', event)
+      }
+    }
+  })
+)
+
+export default app
+```
+
+### Authenticated WebSocket
+
+```typescript
+// src/websocket/auth.ts
+import { upgradeWebSocket } from 'hono/cloudflare-workers'
+import { verify } from 'hono/jwt'
+
+interface ConnectionInfo {
+  userId: string
+  connectedAt: Date
+}
+
+const connections = new Map<WebSocket, ConnectionInfo>()
+
+export const authenticatedWebSocket = upgradeWebSocket((c) => {
+  return {
+    async onOpen(event, ws) {
+      try {
+        // Extract token from query parameter or header
+        const url = new URL(c.req.url)
+        const token = url.searchParams.get('token') || 
+                     c.req.header('Authorization')?.replace('Bearer ', '')
+        
+        if (!token) {
+          ws.close(1008, 'Authentication required')
+          return
+        }
+        
+        // Verify JWT token
+        const payload = await verify(token, c.env.JWT_SECRET)
+        const userId = payload.sub as string
+        
+        // Store connection info
+        connections.set(ws, {
+          userId,
+          connectedAt: new Date()
+        })
+        
+        console.log(`User ${userId} connected`)
+        ws.send(JSON.stringify({
+          type: 'connected',
+          userId,
+          timestamp: new Date().toISOString()
+        }))
+        
+      } catch (error) {
+        console.error('Authentication failed:', error)
+        ws.close(1008, 'Invalid token')
+      }
+    },
+    
+    onMessage(event, ws) {
+      const connection = connections.get(ws)
+      if (!connection) {
+        ws.close(1008, 'Unauthenticated')
+        return
+      }
+      
+      try {
+        const data = JSON.parse(event.data.toString())
+        handleMessage(ws, connection, data)
+      } catch (error) {
+        ws.send(JSON.stringify({
+          type: 'error',
+          message: 'Invalid JSON'
+        }))
+      }
+    },
+    
+    onClose(event, ws) {
+      const connection = connections.get(ws)
+      if (connection) {
+        console.log(`User ${connection.userId} disconnected`)
+        connections.delete(ws)
+      }
+    },
+    
+    onError(event, ws) {
+      console.error('WebSocket error:', event)
+      connections.delete(ws)
+    }
+  }
+})
+
+async function handleMessage(
+  ws: WebSocket, 
+  connection: ConnectionInfo, 
+  data: any
+) {
+  switch (data.type) {
+    case 'ping':
+      ws.send(JSON.stringify({ type: 'pong' }))
+      break
+      
+    case 'chat':
+      await handleChatMessage(ws, connection, data)
+      break
+      
+    default:
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: `Unknown message type: ${data.type}`
+      }))
+  }
+}
+```
+
+### Chat Room Implementation
+
+```typescript
+// src/websocket/chat.ts
+import { z } from 'zod'
+
+interface Room {
+  id: string
+  name: string
+  connections: Set<WebSocket>
+  createdAt: Date
+}
+
+interface User {
+  id: string
+  name: string
+  ws: WebSocket
+}
+
+const rooms = new Map<string, Room>()
+const users = new Map<WebSocket, User>()
+
+const messageSchema = z.object({
+  type: z.literal('chat'),
+  roomId: z.string(),
+  content: z.string().min(1).max(500)
+})
+
+const joinRoomSchema = z.object({
+  type: z.literal('join'),
+  roomId: z.string(),
+  userName: z.string().min(1).max(50)
+})
+
+export const chatWebSocket = upgradeWebSocket((c) => {
+  return {
+    onOpen(event, ws) {
+      console.log('Chat client connected')
+    },
+    
+    onMessage(event, ws) {
+      try {
+        const data = JSON.parse(event.data.toString())
+        
+        switch (data.type) {
+          case 'join':
+            handleJoinRoom(ws, joinRoomSchema.parse(data))
+            break
+            
+          case 'chat':
+            handleChatMessage(ws, messageSchema.parse(data))
+            break
+            
+          case 'leave':
+            handleLeaveRoom(ws, data.roomId)
+            break
+            
+          default:
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Unknown message type'
+            }))
+        }
+      } catch (error) {
+        ws.send(JSON.stringify({
+          type: 'error',
+          message: error instanceof z.ZodError 
+            ? 'Invalid message format'
+            : 'Message processing failed'
+        }))
+      }
+    },
+    
+    onClose(event, ws) {
+      const user = users.get(ws)
+      if (user) {
+        // Remove user from all rooms
+        for (const room of rooms.values()) {
+          if (room.connections.has(ws)) {
+            room.connections.delete(ws)
+            broadcastToRoom(room.id, {
+              type: 'user-left',
+              userId: user.id,
+              userName: user.name
+            }, ws)
+          }
+        }
+        users.delete(ws)
+      }
+    }
+  }
+})
+
+function handleJoinRoom(ws: WebSocket, data: z.infer<typeof joinRoomSchema>) {
+  const { roomId, userName } = data
+  
+  // Create room if it doesn't exist
+  if (!rooms.has(roomId)) {
+    rooms.set(roomId, {
+      id: roomId,
+      name: roomId,
+      connections: new Set(),
+      createdAt: new Date()
+    })
+  }
+  
+  const room = rooms.get(roomId)!
+  const user: User = {
+    id: crypto.randomUUID(),
+    name: userName,
+    ws
+  }
+  
+  // Add user to room and tracking
+  room.connections.add(ws)
+  users.set(ws, user)
+  
+  // Notify user of successful join
+  ws.send(JSON.stringify({
+    type: 'joined',
+    roomId,
+    userId: user.id,
+    userCount: room.connections.size
+  }))
+  
+  // Notify other users
+  broadcastToRoom(roomId, {
+    type: 'user-joined',
+    userId: user.id,
+    userName: user.name,
+    userCount: room.connections.size
+  }, ws)
+}
+
+function handleChatMessage(ws: WebSocket, data: z.infer<typeof messageSchema>) {
+  const user = users.get(ws)
+  if (!user) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Not in a room'
+    }))
+    return
+  }
+  
+  const { roomId, content } = data
+  const room = rooms.get(roomId)
+  
+  if (!room || !room.connections.has(ws)) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Not in this room'
+    }))
+    return
+  }
+  
+  // Broadcast message to all users in room
+  broadcastToRoom(roomId, {
+    type: 'message',
+    roomId,
+    userId: user.id,
+    userName: user.name,
+    content,
+    timestamp: new Date().toISOString()
+  })
+}
+
+function handleLeaveRoom(ws: WebSocket, roomId: string) {
+  const user = users.get(ws)
+  const room = rooms.get(roomId)
+  
+  if (room && user && room.connections.has(ws)) {
+    room.connections.delete(ws)
+    
+    // Notify other users
+    broadcastToRoom(roomId, {
+      type: 'user-left',
+      userId: user.id,
+      userName: user.name,
+      userCount: room.connections.size
+    }, ws)
+    
+    // Clean up empty rooms
+    if (room.connections.size === 0) {
+      rooms.delete(roomId)
+    }
+  }
+}
+
+function broadcastToRoom(roomId: string, message: any, exclude?: WebSocket) {
+  const room = rooms.get(roomId)
+  if (!room) return
+  
+  const messageStr = JSON.stringify(message)
+  
+  for (const ws of room.connections) {
+    if (ws !== exclude && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(messageStr)
+      } catch (error) {
+        console.error('Failed to send message to client:', error)
+        room.connections.delete(ws)
+      }
+    }
+  }
+}
+```
+
+### Rate Limiting for WebSocket
+
+```typescript
+// src/websocket/rate-limit.ts
+interface ClientInfo {
+  lastMessage: number
+  messageCount: number
+  banned: boolean
+}
+
+const clients = new Map<WebSocket, ClientInfo>()
+const RATE_LIMIT = {
+  maxMessages: 10,
+  windowMs: 60000, // 1 minute
+  banDuration: 300000 // 5 minutes
+}
+
+export function initRateLimit(ws: WebSocket) {
+  clients.set(ws, {
+    lastMessage: 0,
+    messageCount: 0,
+    banned: false
+  })
+}
+
+export function checkRateLimit(ws: WebSocket): boolean {
+  const client = clients.get(ws)
+  if (!client) return false
+  
+  const now = Date.now()
+  
+  // Check if client is banned
+  if (client.banned && now - client.lastMessage < RATE_LIMIT.banDuration) {
+    return false
+  }
+  
+  // Reset ban if duration has passed
+  if (client.banned && now - client.lastMessage >= RATE_LIMIT.banDuration) {
+    client.banned = false
+    client.messageCount = 0
+  }
+  
+  // Reset message count if window has passed
+  if (now - client.lastMessage > RATE_LIMIT.windowMs) {
+    client.messageCount = 0
+  }
+  
+  client.messageCount++
+  client.lastMessage = now
+  
+  // Ban if rate limit exceeded
+  if (client.messageCount > RATE_LIMIT.maxMessages) {
+    client.banned = true
+    ws.send(JSON.stringify({
+      type: 'error',
+      message: 'Rate limit exceeded. You are temporarily banned.'
+    }))
+    return false
+  }
+  
+  return true
+}
+
+export function cleanupRateLimit(ws: WebSocket) {
+  clients.delete(ws)
+}
+```
+
+### Node.js WebSocket Implementation
+
+```typescript
+// src/node-websocket.ts
+import { Hono } from 'hono'
+import { createNodeWebSocket } from '@hono/node-ws'
+
+const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
+
+const app = new Hono()
+
+app.get('/ws', upgradeWebSocket((c) => {
+  return {
+    onOpen(event, ws) {
+      console.log('Connection opened')
+    },
+    
+    onMessage(event, ws) {
+      const message = event.data.toString()
+      ws.send(`Echo: ${message}`)
+    },
+    
+    onClose() {
+      console.log('Connection closed')
+    }
+  }
+}))
+
+// For Node.js server
+import { serve } from '@hono/node-server'
+
+const server = serve({
+  fetch: app.fetch,
+  port: 3000
+})
+
+injectWebSocket(server)
+```
+
+### WebSocket Client (Frontend)
+
+```typescript
+// client/websocket.ts
+export class WebSocketClient {
+  private ws: WebSocket | null = null
+  private reconnectAttempts = 0
+  private maxReconnectAttempts = 5
+  private reconnectDelay = 1000
+  
+  constructor(
+    private url: string,
+    private token?: string
+  ) {}
+  
+  connect(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const wsUrl = this.token 
+        ? `${this.url}?token=${this.token}`
+        : this.url
+      
+      this.ws = new WebSocket(wsUrl)
+      
+      this.ws.onopen = () => {
+        console.log('WebSocket connected')
+        this.reconnectAttempts = 0
+        resolve()
+      }
+      
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          this.handleMessage(data)
+        } catch (error) {
+          console.error('Failed to parse message:', error)
+        }
+      }
+      
+      this.ws.onclose = (event) => {
+        console.log('WebSocket disconnected:', event.code, event.reason)
+        this.handleReconnect()
+      }
+      
+      this.ws.onerror = (error) => {
+        console.error('WebSocket error:', error)
+        reject(error)
+      }
+    })
+  }
+  
+  private handleReconnect() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++
+      const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
+      
+      console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`)
+      
+      setTimeout(() => {
+        this.connect().catch(console.error)
+      }, delay)
+    } else {
+      console.error('Max reconnection attempts reached')
+    }
+  }
+  
+  send(data: any) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data))
+    } else {
+      console.error('WebSocket is not connected')
+    }
+  }
+  
+  private handleMessage(data: any) {
+    switch (data.type) {
+      case 'message':
+        this.onMessage?.(data)
+        break
+      case 'user-joined':
+        this.onUserJoined?.(data)
+        break
+      case 'user-left':
+        this.onUserLeft?.(data)
+        break
+      case 'error':
+        this.onError?.(data)
+        break
+    }
+  }
+  
+  // Event handlers (to be overridden)
+  onMessage?: (data: any) => void
+  onUserJoined?: (data: any) => void
+  onUserLeft?: (data: any) => void
+  onError?: (data: any) => void
+  
+  disconnect() {
+    if (this.ws) {
+      this.ws.close()
+      this.ws = null
+    }
+  }
+}
+
+// Usage
+const client = new WebSocketClient('ws://localhost:3000/ws', 'your-jwt-token')
+
+client.onMessage = (data) => {
+  console.log('Received message:', data)
+}
+
+client.onUserJoined = (data) => {
+  console.log('User joined:', data.userName)
+}
+
+await client.connect()
+client.send({ type: 'join', roomId: 'general', userName: 'Alice' })
+```
+
+### Sources
+
+- [WebSocket Support](https://hono.dev/docs/helpers/websocket)
+- [Cloudflare Workers WebSocket](https://developers.cloudflare.com/workers/runtime-apis/websockets/)
+- [Node.js WebSocket](https://github.com/honojs/node-ws)
+````

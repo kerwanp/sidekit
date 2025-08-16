@@ -1,0 +1,16 @@
+{
+  "root": true,
+  "title": "Sidekit",
+  "description": "Your AI coding agent toolkit",
+  "icon": "Sparkles",
+  "pages": [
+    "---Introduction---",
+    "index",
+    "registry",
+    "---Rules---",
+    "rules/index",
+    "---Kits---",
+    "rules/index",
+    "---Advanced---"
+  ]
+}
