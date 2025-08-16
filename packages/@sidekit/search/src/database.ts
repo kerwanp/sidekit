@@ -21,6 +21,8 @@ export function loadDatabase({ filename }: DatabaseOptions) {
       USING vec0(
         id TEXT PRIMARY KEY,
         embedding float[384],
+        name TEXT,
+        description TEXT NULLABLE,
         content TEXT
       )
     `);
@@ -32,25 +34,28 @@ export function loadDatabase({ filename }: DatabaseOptions) {
       const embed = await createEmbed(entry.content);
 
       if (exists) {
-        db.prepare(
+        db.prepare<[Float32Array, string, string, string, string]>(
           `
           UPDATE docs
-          SET embedding = ?, content = ?
+          SET embedding = ?, name = ?, description = ?, content = ?
           WHERE id = ?
         `,
-        ).run(embed, entry.content, entry.id);
+        ).run(embed, entry.name, entry.description, entry.content, entry.id);
       } else {
-        db.prepare(
+        db.prepare<[string, Float32Array, string, string, string]>(
           `
-        INSERT INTO docs(id, embedding, content)
-        VALUES (?, ?, ?)
+        INSERT INTO docs(id, embedding, name, description, content)
+        VALUES (?, ?, ?, ?, ?)
       `,
-        ).run(entry.id, embed, entry.content);
+        ).run(entry.id, embed, entry.name, entry.description, entry.content);
       }
     },
     async retrieve(id: string) {
       return db
-        .prepare<[string], Entry>(`SELECT id, content FROM docs WHERE id = ?`)
+        .prepare<
+          [string],
+          Entry
+        >(`SELECT id, name, description, content FROM docs WHERE id = ?`)
         .get(id);
     },
     async search(query: string, { limit = 5 }: SearchOptions = {}) {
@@ -59,7 +64,7 @@ export function loadDatabase({ filename }: DatabaseOptions) {
       const rows = db
         .prepare<[Float32Array, number], SearchResult>(
           `
-            SELECT id, distance, content FROM docs 
+            SELECT id, name, description, content, distance FROM docs 
             WHERE embedding MATCH ? ORDER BY distance LIMIT ?
           `,
         )
@@ -73,6 +78,9 @@ export function loadDatabase({ filename }: DatabaseOptions) {
         .get();
 
       return response?.count || 0;
+    },
+    clear() {
+      db.prepare<[], { count: number }>(`DELETE FROM docs`).run();
     },
   };
 }

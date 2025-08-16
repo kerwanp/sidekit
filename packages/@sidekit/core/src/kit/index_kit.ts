@@ -14,10 +14,9 @@ export async function indexKit({ cwd }: IndexKitOptions) {
   const config = await loadKitConfig({ cwd: cwd });
 
   const rules = await readFolder(join(cwd, "rules"), schemas.rule);
-  const docs = await readFolder(join(cwd, "docs"), schemas.doc);
+  const docs = await readFolder(join(cwd, "docs"), schemas.rule);
 
-  config.rules = rules;
-  config.docs = docs;
+  config.rules = [...rules, ...docs];
 
   await updateKitConfig({ path: cwd, config });
 

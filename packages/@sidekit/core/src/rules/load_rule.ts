@@ -16,7 +16,10 @@ export async function loadRule({ id, path }: LoadRuleOptions) {
 
   if (normalized.source === "remote") {
     const kit = await resolveKit(normalized.kitId);
-    const output = kit.rules.find((rule) => rule.id === normalized.ruleId);
+
+    const output = kit.rules?.find(
+      (rule) => rule.id === normalized.ruleId && rule.type === "rule",
+    );
 
     if (!output) {
       throw new RuleNotFoundException(

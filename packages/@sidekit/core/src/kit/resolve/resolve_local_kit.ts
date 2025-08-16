@@ -13,6 +13,7 @@ export async function resolveLocalKit(id: string) {
 
   try {
     const config = await readConfig(join(path, "sidekit.json"), schemas.kit);
+
     return config;
   } catch (e) {
     if (e instanceof FileException) {

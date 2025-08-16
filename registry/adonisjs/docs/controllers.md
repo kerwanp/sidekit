@@ -2,7 +2,7 @@
 parent: adonisjs
 name: Controllers
 description: Guidelines for controllers and routing patterns in AdonisJS 6
-type: examples
+type: documentation
 ---
 
 ## Controllers and Routing

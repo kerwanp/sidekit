@@ -1,29 +1,29 @@
-import { SidekitGeneratorOptions } from "../types.js";
-import { claudeGenerator } from "./claude.js";
-import { copilotGenerator } from "./copilot.js";
-import { cursorGenerator } from "./cursor.js";
-import { opencodeGenerator } from "./opencode.js";
+import claude from "../agents/claude.js";
+import { AgentOptions } from "../agents/define.js";
+import { MCPConfig } from "../mcp/types.js";
+import { SidekitConfig, SidekitRule } from "../types.js";
 
-export type GenerateOptions = SidekitGeneratorOptions;
+export type GenerateOptions = {
+  cwd: string;
+  agents: SidekitConfig["agents"];
+  rules: SidekitRule[];
+  mcps: Record<string, MCPConfig>;
+};
+
+const agents: Record<SidekitConfig["agents"][number], AgentOptions> = {
+  claude,
+  opencode: claude,
+  copilot: claude,
+  cursor: claude,
+};
 
 export async function generate(options: GenerateOptions) {
   await Promise.all(
-    options.config.agents.map(async (agent) => {
-      if (agent === "claude") {
-        await claudeGenerator(options);
-      }
+    options.agents.map(async (name) => {
+      const agent = agents[name];
 
-      if (agent === "opencode") {
-        await opencodeGenerator(options);
-      }
-
-      if (agent === "copilot") {
-        await copilotGenerator(options);
-      }
-
-      if (agent === "cursor") {
-        await cursorGenerator(options);
-      }
+      await agent.generateRules({ cwd: options.cwd, rules: options.rules });
+      await agent.configureMCPs({ cwd: options.cwd, mcps: options.mcps });
     }),
   );
 }

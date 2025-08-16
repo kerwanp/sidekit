@@ -2,102 +2,59 @@
 
 This file provides guidance to Coding agents when working with code in this repository.
 
-=== adonisjs guidelines ===
+SIDEKIT HAS BEEN RENAMED TO VANUPIED
+=== sidekit guidelines ===
 
-## Structure
+## Documentation
 
+Sidekit is a utility tool for deterministically managing coding agent rules and guidelines. It also provide a registry of predifined rules.
+
+### Usage
+
+- `sidekit ls` - List available guideline kits
+- `sidekit ls <kit>` - List available rules and presets for a specific kit
+- `sidekit add <kit> <rule_name>` - Add a rule to the configuration and generate agent files
+- `sidekit generate` - Generate agent files
+
+### Custom rules
+
+You can create custom rules inside `.sidekit/rules` folder and reference them inside `.sidekit/config.json`
+
+#### Example
+
+.sidekit/rules/example.md
+
+```md
+---
+parent: workflow
+name: Example rule
+description: Example description of the rule
+type: rule
+---
+
+This content will be added to the generated agent files.
 ```
-root/
-├── app/                  # Core application logic (MVC pattern)
-│   ├── controllers/      # HTTP request handlers
-│   ├── exceptions/       # Custom error handling and exception classes
-│   ├── middleware/       # Request/response interceptors
-│   └── models/           # Lucid ORM models (Active Record pattern)
-├── bin/                  # Executable scripts
-├── config/               # Application configuration files
-├── database/             # Database-related files
-│   ├── factories/        # Model factories
-│   └── migrations/       # Database migration files
-├── start/                # Application bootstrapping
-│   ├── env.ts            # Environment variable validation
-│   ├── kernel.ts         # Middleware registration
-│   └── routes.ts         # Route definitions
-├── tests/                # Test suites
-│   ├── bootstrap.ts      # Test framework setup (japa)
-│   ├── unit/             # Unit tests
-│   ├── e2e/              # E2E tests
-│   └── functional/       # Integration tests
-├── ace.js                # AdonisJS CLI configuration
-├── adonisrc.ts           # AdonisJS runtime configuration
-├── eslint.config.js      # Code linting rules
-├── package.json          # Dependencies and scripts
-└── tsconfig.json         # TypeScript configuration
-```
 
-### Rules
+.sidekit/config.json
 
-- You MUST NOT modify `ace.js` file
-
-## Controllers
-
-### Rules
-
-- Controllers MUST be placed inside the `app/controllers` folder
-- Controllers MUST be named using `<name>_controller.ts` (eg. `auth_controller.ts`)
-- Controllers MUST ONLY export a default class (eg. `AuthController`)
-
-### Exceptions
-
-Exceptions should not be handled inside controllers. Instead you must use existing exceptions or custom ones.
-
-### Example
-
-#### Dependency injection
-
-Dependencies (services) must be injected inside the constructor. When doing so `@inject` decorator MUST be added to the class.
-
-```ts
-@inject()
-export default class PostsController {
-  constructor(private postsService: PostsService) {}
-
-  store() {}
-  view() {}
+```json
+{
+  "rules": ["rules/example.md"]
 }
 ```
 
-### Sources
+## Important
 
-- More information are available here <https://docs.adonisjs.com/guides/basics/controllers>
+When modifying rules manually (without the command line) you must generate the agent files using `sidekit generate` command.
 
-## Exceptions
+=== workflow guidelines ===
 
-### Rules
+## Sidekit setup
 
-- You MUST NOT throw classic errors. Instead you should create new ones or reuse existing.
-- The error messages MUST be clear and contain the context
-- You MUST NEVER EVER log credentials or sensitive informations
-- Exception files MUST be stored inside `app/exceptions` folder
-- Exception names must be suffixed with `Exception` (eg. `ExampleException`)
-- Exceptions MUST extends `Exception` from `@adonisjs/core/exceptions`
+When installing new libraries/dependencies you MUST look for available Sidekit rules and install the recommended preset.
 
-### Examples
+Steps:
 
-#### Custom exception
-
-```ts
-import { Exception } from "@adonisjs/core/exceptions";
-
-export default class ExampleException extends Exception {
-  static status = 403; // Response status code
-  static code = "E_EXAMPLE"; // Identifier used for logging
-
-  constructor(user: User, message: string) {
-    super(`Example error with user ${user.id}: ${message}`);
-  }
-}
-```
-
-### Sources
-
-- More information are available here <https://docs.adonisjs.com/guides/basics/exception-handling>
+1. List available kits `sidekit ls`
+2. Add the recommended preset inside `.sidekit/config.json` (eg. `adonisjs:recommended`)
+3. Generate agent files using `sidekit generate`

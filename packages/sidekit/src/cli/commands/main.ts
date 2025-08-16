@@ -2,6 +2,7 @@ import { defineCommand } from "citty";
 import kit from "./kit/main.js";
 import search from "./search/main.js";
 import mcp from "./mcp/main.js";
+import db from "./db/main.js";
 import generate from "./generate.js";
 import add from "./add.js";
 import init from "./init.js";
@@ -18,5 +19,6 @@ export default defineCommand({
     search,
     mcp,
     kit,
+    db,
   },
 });

@@ -1,7 +1,8 @@
 import { defineCommand } from "citty";
 import { intro, outro } from "@clack/prompts";
+import { loadSidekitConfig } from "@sidekit/core";
 import { steps } from "../steps.js";
-import color from "picocolors";
+import { colors } from "../colors.js";
 
 export default defineCommand({
   meta: {
@@ -16,9 +17,11 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    intro(color.bgBlackBright(` sidekit generate `));
+    intro(colors.bgPrimary(` sidekit generate `));
 
-    await steps.generate(args.cwd);
+    const config = await loadSidekitConfig({ cwd: args.cwd });
+
+    await steps.generate(args.cwd, config);
 
     outro(`done`);
   },

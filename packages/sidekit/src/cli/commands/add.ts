@@ -2,8 +2,7 @@ import { intro } from "@clack/prompts";
 import { defineCommand } from "citty";
 import color from "picocolors";
 import { steps } from "../steps.js";
-import { updateSidekitConfig } from "../../sidekit/update_sidekit_config.js";
-import { loadSidekitConfig } from "../../sidekit/load_sidekit_config.js";
+import { updateSidekitConfig, loadSidekitConfig } from "@sidekit/core";
 
 export default defineCommand({
   meta: {
@@ -40,6 +39,6 @@ export default defineCommand({
       config,
     });
 
-    await steps.generate(args.cwd);
+    await steps.generate(args.cwd, config);
   },
 });

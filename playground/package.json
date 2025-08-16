@@ -1,6 +1,7 @@
 {
   "name": "playground",
   "dependencies": {
+    "example": "workspace:*",
     "sidekit": "workspace:*"
   },
   "packageManager": "yarn@4.9.2"

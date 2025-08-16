@@ -27,7 +27,10 @@
     ".": "./build/src/index.js",
     "./kit": "./build/src/kit/index.js",
     "./registry": "./build/src/registry/index.js",
-    "./rules": "./build/src/rules/index.js"
+    "./rules": "./build/src/rules/index.js",
+    "./schemas": "./build/src/schemas.js",
+    "./exceptions": "./build/src/exceptions/index.js",
+    "./types": "./build/src/types.js"
   },
   "devDependencies": {
     "@adonisjs/eslint-config": "^2.1.2",
@@ -50,6 +53,7 @@
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "@sidekit/search": "workspace:*",
+    "chalk": "^5.5.0",
     "citty": "^0.1.6",
     "effect": "^3.17.7",
     "front-matter": "^4.0.2",
@@ -57,6 +61,7 @@
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
     "prettier": "^3.6.2",
+    "yaml": "^2.8.1",
     "zod": "^4.0.17"
   },
   "keywords": [

@@ -11,7 +11,7 @@ export async function loadPresetRules({ path, id }: LoadPresetRules) {
   const [kitId, presetId] = id.split(":");
   const kit = await resolveKit(kitId);
 
-  const preset = kit.presets[presetId];
+  const preset = kit.presets?.[presetId];
 
   if (!preset) {
     throw new PresetNotFoundException(
@@ -22,7 +22,7 @@ export async function loadPresetRules({ path, id }: LoadPresetRules) {
 
   const output = [];
 
-  for (const ruleId of preset) {
+  for (const ruleId of preset.rules) {
     output.push(await loadRule({ path, id: ruleId }));
   }
 

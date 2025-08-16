@@ -2,5 +2,14 @@
   "$schema": "https://github.com/kerwanp/sidekit/blob/main/schemas/config.json",
   "agents": ["claude"],
   "rules": ["rules/introduction.md"],
-  "presets": ["adonisjs:recommended", "sidekit:recommended"]
+  "docs": ["adonisjs"],
+  "presets": ["example:recommended"],
+  "mcps": {
+    "sidekit": {
+      "type": "stdio",
+      "command": "yarn",
+      "args": ["sidekit", "mcp"],
+      "env": {}
+    }
+  }
 }

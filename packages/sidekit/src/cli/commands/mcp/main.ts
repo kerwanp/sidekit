@@ -6,7 +6,7 @@ import { join } from "pathe";
 export default defineCommand({
   meta: {
     name: "mcp",
-    description: "Manage the Sidekit MCP server",
+    description: "Starts the Sidekit MCP server",
   },
   args: {
     ...GlobalArgs,

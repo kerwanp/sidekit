@@ -57,7 +57,7 @@ export function createMCPServer({ database }: ServerOptions) {
       return {
         content: result.map((item) => ({
           type: "resource_link",
-          uri: `sidekit://documentations/${item.id}.md`,
+          uri: `sidekit://documentation/${item.id}`,
           name: item.id,
           mimeType: "text/markdown",
         })),

@@ -1,8 +1,9 @@
 import z from "zod";
 import fm from "front-matter";
-import { readFile } from "./file.js";
+import { readFile, writeFile } from "./file.js";
 import { basename, extname } from "pathe";
 import { InvalidSchemaException } from "../exceptions/invalid_schema_exception.js";
+import * as YAML from "yaml";
 
 export async function readMarkdown<T extends z.ZodType>(
   path: string,
@@ -25,4 +26,14 @@ export async function readMarkdown<T extends z.ZodType>(
     }
     throw e;
   }
+}
+
+export async function writeMarkdown(
+  path: string,
+  content: string,
+  attributes: any,
+) {
+  const matter = YAML.stringify(attributes);
+
+  await writeFile(path, ["---", matter, "---", content].join("\n"));
 }

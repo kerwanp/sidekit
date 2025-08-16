@@ -1,36 +1,37 @@
 import { z } from "zod";
+import { MCPConfigSchema } from "./mcp/schemas.js";
 
 const rule = z.object({
   parent: z.string().optional(),
   id: z.string(),
   name: z.string(),
   description: z.string().optional(),
-  type: z.literal("rule"),
+  type: z.enum(["rule", "documentation"]),
   content: z.string(),
 });
 
-const doc = z.object({
-  id: z.string(),
+const preset = z.object({
   name: z.string(),
   description: z.string().optional(),
-  type: z.enum(["examples"]),
-  content: z.string(),
+  rules: z.array(z.string()),
 });
 
 const kit = z.object({
   $schema: z.string().optional(),
+  folders: z.array(z.string()),
   name: z.string(),
   description: z.string().optional(),
   rules: z.array(rule),
-  docs: z.array(doc),
-  presets: z.record(z.string(), z.array(z.string())),
+  presets: z.record(z.string(), preset),
 });
 
 const config = z.object({
   $schema: z.string().optional(),
   agents: z.array(z.enum(["claude", "opencode", "copilot", "cursor"])),
-  rules: z.array(z.string()),
-  presets: z.array(z.string()),
+  rules: z.array(z.string()).default([]),
+  docs: z.array(z.string()).default([]),
+  presets: z.array(z.string()).default([]),
+  mcps: z.record(z.string(), MCPConfigSchema).default({}),
 });
 
 const registry = z.object({
@@ -46,8 +47,8 @@ const registry = z.object({
 
 export const schemas = {
   rule,
-  doc,
   kit,
   config,
   registry,
+  preset,
 };
